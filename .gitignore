@@ -396,3 +396,8 @@ $RECYCLE.BIN/
 # *.wav
 # *.flac
 # *.aac
+
+# Next.js
+.next/
+node_modules/
+
