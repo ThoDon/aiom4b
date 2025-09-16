@@ -1,7 +1,7 @@
 """Job service for managing conversion jobs in the database."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
@@ -86,7 +86,7 @@ class JobService:
     def clear_old_jobs(self, days_old: int = 30) -> int:
         """Clear old completed/failed jobs."""
         cutoff_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_old)
+        cutoff_date = cutoff_date - timedelta(days=days_old)
         
         statement = select(JobDB).where(
             and_(
