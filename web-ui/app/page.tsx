@@ -16,7 +16,12 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { apiService, type ConversionJob, type SourceFolder } from "@/lib/api";
+import {
+  apiService,
+  type ConversionJob,
+  type ConversionRequest,
+  type SourceFolder,
+} from "@/lib/api";
 import { formatDate, formatFileSize } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,7 +38,9 @@ import { useState } from "react";
 
 export default function Home() {
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
-  const [outputFilename, setOutputFilename] = useState("");
+  const [outputFilenames, setOutputFilenames] = useState<
+    Record<string, string>
+  >({});
   const queryClient = useQueryClient();
 
   // Queries
@@ -55,7 +62,7 @@ export default function Home() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       setSelectedFolders([]);
-      setOutputFilename("");
+      setOutputFilenames({});
     },
   });
 
@@ -83,19 +90,47 @@ export default function Home() {
   };
 
   const handleFolderToggle = (folderPath: string) => {
-    setSelectedFolders((prev) =>
-      prev.includes(folderPath)
+    setSelectedFolders((prev) => {
+      const newSelected = prev.includes(folderPath)
         ? prev.filter((path) => path !== folderPath)
-        : [...prev, folderPath]
-    );
+        : [...prev, folderPath];
+
+      // Clean up output filenames for removed folders
+      if (!newSelected.includes(folderPath)) {
+        setOutputFilenames((prevFilenames) => {
+          const newFilenames = { ...prevFilenames };
+          delete newFilenames[folderPath];
+          return newFilenames;
+        });
+      }
+
+      return newSelected;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedFolders.length === folders.length) {
+      // Deselect all
+      setSelectedFolders([]);
+      setOutputFilenames({});
+    } else {
+      // Select all
+      const allFolderPaths = folders.map((folder) => folder.path);
+      setSelectedFolders(allFolderPaths);
+    }
   };
 
   const handleStartConversion = () => {
     if (selectedFolders.length === 0) return;
 
+    // Create folder conversions mapping
+    const folderConversions: Record<string, string | null> = {};
+    selectedFolders.forEach((folder) => {
+      folderConversions[folder] = outputFilenames[folder] || null;
+    });
+
     startConversionMutation.mutate({
-      source_folders: selectedFolders,
-      output_filename: outputFilename || undefined,
+      folder_conversions: folderConversions,
     });
   };
 
@@ -146,11 +181,25 @@ export default function Home() {
                           <RefreshCw className="h-4 w-4" />
                         </Button>
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className="flex flex-col gap-2">
                         Select folders containing MP3 files to convert
+                        {!foldersLoading && folders.length > 0 && (
+                          <div className="flex items-center space-x-2 pb-3 border-b">
+                            <Checkbox
+                              checked={
+                                selectedFolders.length === folders.length &&
+                                folders.length > 0
+                              }
+                              onCheckedChange={handleSelectAll}
+                            />
+                            <label className="text-sm font-medium cursor-pointer">
+                              Select All ({folders.length} folders)
+                            </label>
+                          </div>
+                        )}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="max-h-[500px] overflow-y-auto">
                       {foldersLoading ? (
                         <div className="flex items-center justify-center py-8">
                           <RefreshCw className="h-6 w-6 animate-spin" />
@@ -208,20 +257,8 @@ export default function Home() {
                         Configure and start the MP3 to M4B conversion
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium">
-                          Output Filename (optional)
-                        </label>
-                        <Input
-                          placeholder="my_audiobook.m4b"
-                          value={outputFilename}
-                          onChange={(e) => setOutputFilename(e.target.value)}
-                          className="mt-1"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
+                    <CardContent className="space-y-4 ">
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
                         <p className="text-sm font-medium">
                           Selected Folders ({selectedFolders.length})
                         </p>
@@ -230,22 +267,40 @@ export default function Home() {
                             No folders selected
                           </p>
                         ) : (
-                          <div className="space-y-1">
+                          <div className="space-y-3">
                             {selectedFolders.map((folder) => (
                               <div
                                 key={folder}
-                                className="flex items-center justify-between p-2 bg-accent rounded"
+                                className="p-3 bg-accent rounded-lg space-y-2"
                               >
-                                <span className="text-sm truncate">
-                                  {folder}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleFolderToggle(folder)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium truncate">
+                                    {folder}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleFolderToggle(folder)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">
+                                    Output Filename (optional)
+                                  </label>
+                                  <Input
+                                    placeholder="my_audiobook.m4b"
+                                    value={outputFilenames[folder] || ""}
+                                    onChange={(e) =>
+                                      setOutputFilenames((prev) => ({
+                                        ...prev,
+                                        [folder]: e.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 text-sm"
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>

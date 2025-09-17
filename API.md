@@ -53,37 +53,80 @@ curl -X GET "http://localhost:8000/api/v1/folders"
 
 **POST** `/convert`
 
-Start a new MP3 to M4B conversion job.
+Start MP3 to M4B conversion jobs. Each folder is treated as a separate unit and creates its own job and M4B file.
 
 **Request Body:**
 
 ```json
 {
-  "source_folders": ["/path/to/folder1", "/path/to/folder2"],
-  "output_filename": "my_audiobook.m4b"
+  "folder_conversions": {
+    "/path/to/folder1": "book1.m4b",
+    "/path/to/folder2": "book2.m4b",
+    "/path/to/folder3": null
+  }
 }
 ```
 
 **Response:**
 
 ```json
-{
-  "job_id": "123e4567-e89b-12d3-a456-426614174000",
-  "status": "queued",
-  "message": "Conversion job started with ID: 123e4567-e89b-12d3-a456-426614174000"
-}
+[
+  {
+    "job_id": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "queued",
+    "message": "Conversion job started with ID: 123e4567-e89b-12d3-a456-426614174000"
+  },
+  {
+    "job_id": "9876543-e89b-12d3-a456-426614174001",
+    "status": "queued",
+    "message": "Conversion job started with ID: 9876543-e89b-12d3-a456-426614174001"
+  },
+  {
+    "job_id": "4567890-e89b-12d3-a456-426614174002",
+    "status": "queued",
+    "message": "Conversion job started with ID: 4567890-e89b-12d3-a456-426614174002"
+  }
+]
 ```
 
-**Example:**
+**Examples:**
 
 ```bash
+# Conversion with custom filenames for each folder
 curl -X POST "http://localhost:8000/api/v1/convert" \
   -H "Content-Type: application/json" \
   -d '{
-    "source_folders": ["/path/to/folder1", "/path/to/folder2"],
-    "output_filename": "my_audiobook.m4b"
+    "folder_conversions": {
+      "/path/to/folder1": "book1.m4b",
+      "/path/to/folder2": "book2.m4b"
+    }
+  }'
+
+# Conversion with auto-generated filenames (null values)
+curl -X POST "http://localhost:8000/api/v1/convert" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "folder_conversions": {
+      "/path/to/folder1": null,
+      "/path/to/folder2": null
+    }
+  }'
+
+# Mixed: some custom, some auto-generated
+curl -X POST "http://localhost:8000/api/v1/convert" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "folder_conversions": {
+      "/path/to/folder1": "my_custom_book.m4b",
+      "/path/to/folder2": null
+    }
   }'
 ```
+
+**Filename Handling:**
+
+- **Custom filename**: Provide the desired filename as the value
+- **Auto-generated**: Use `null` as the value to auto-generate a filename based on the folder name
 
 #### 2.1. Create Job
 

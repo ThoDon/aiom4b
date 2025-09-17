@@ -8,10 +8,10 @@ from typing import List, Optional
 
 import ffmpeg
 
-from .config import OUTPUT_DIR, USE_ALL_CPUS
-from .utils import get_available_cpu_count
+from .config import OUTPUT_DIR, USE_ALL_CPUS, BACKUP_ENABLED
+from .utils import get_available_cpu_count, create_backup
 from .models import ConversionJob, JobStatus
-from .utils import get_mp3_files, sanitize_filename
+from .utils import get_mp3_files, sanitize_filename, generate_output_filename_from_folders
 
 
 class MP3ToM4BConverter:
@@ -30,8 +30,10 @@ class MP3ToM4BConverter:
         
         # Create job
         if not output_filename:
+            # Generate filename from folder names for cleaner output
+            base_filename = generate_output_filename_from_folders(source_folders)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"converted_{timestamp}.m4b"
+            output_filename = f"{base_filename}_{timestamp}.m4b"
         
         output_filename = sanitize_filename(output_filename)
         if not output_filename.endswith(".m4b"):
@@ -51,6 +53,13 @@ class MP3ToM4BConverter:
             # Update job status
             job.status = JobStatus.RUNNING
             job.started_at = datetime.utcnow()
+            
+            # Create backups if enabled
+            backup_paths = []
+            if BACKUP_ENABLED:
+                for folder in source_folders:
+                    backup_path = create_backup(folder)
+                    backup_paths.append(backup_path)
             
             # Collect all MP3 files
             all_mp3_files = []

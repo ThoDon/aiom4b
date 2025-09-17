@@ -30,8 +30,7 @@ export interface ConversionJob {
 }
 
 export interface ConversionRequest {
-  source_folders: string[];
-  output_filename?: string;
+  folder_conversions: Record<string, string | null>;
 }
 
 export interface JobResponse {
@@ -59,8 +58,10 @@ export const apiService = {
     return response.data;
   },
 
-  // Start a new conversion job
-  startConversion: async (request: ConversionRequest): Promise<JobResponse> => {
+  // Start conversion jobs (one per folder)
+  startConversion: async (
+    request: ConversionRequest
+  ): Promise<JobResponse[]> => {
     const response = await api.post("/convert", request);
     return response.data;
   },

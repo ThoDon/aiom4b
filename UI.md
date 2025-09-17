@@ -49,15 +49,17 @@ The main conversion interface where users can:
 
 - **Browse Source Folders**: View available MP3 folders with metadata
 - **Select Folders**: Choose multiple folders for conversion
-- **Configure Output**: Set custom output filename
-- **Start Conversion**: Initiate new conversion jobs
-- **Monitor Active Jobs**: View real-time job progress
+- **Configure Individual Outputs**: Set custom output filename for each selected folder
+- **Start Multiple Conversions**: Initiate separate conversion jobs for each folder
+- **Monitor Active Jobs**: View real-time job progress for all active conversions
 
 #### Key Features
 
 - **Real-time Updates**: Auto-refresh every 2 seconds
 - **Folder Selection**: Multi-select with checkboxes
-- **Progress Tracking**: Visual progress bars
+- **Individual Filename Configuration**: Each selected folder gets its own output filename input
+- **Separate Job Creation**: Each folder creates its own conversion job and M4B file
+- **Progress Tracking**: Visual progress bars for each job
 - **Status Badges**: Color-coded job status indicators
 - **Download Links**: Direct download for completed jobs
 - **Error Handling**: User-friendly error messages
@@ -121,7 +123,7 @@ export const apiService = {
   clearOldJobs: (days: number) => Promise<{ message: string }>,
 
   // Conversion
-  startConversion: (data: ConversionRequest) => Promise<JobResponse>,
+  startConversion: (data: ConversionRequest) => Promise<JobResponse[]>,
   getJobStatus: (id: string) => Promise<ConversionJob>,
   downloadFile: (id: string) => Promise<Blob>,
   cancelJob: (id: string) => Promise<{ message: string }>,
@@ -157,6 +159,10 @@ interface JobListResponse {
   page: number;
   per_page: number;
 }
+
+interface ConversionRequest {
+  folder_conversions: Record<string, string | null>;
+}
 ```
 
 ## State Management
@@ -190,7 +196,7 @@ const deleteJobMutation = useMutation({
 ### Local State
 
 - **Selected Folders**: Array of selected folder paths
-- **Output Filename**: Custom output filename
+- **Output Filenames**: Record mapping folder paths to custom output filenames
 - **Search Term**: Job search filter
 - **Status Filter**: Job status filter
 - **Pagination**: Current page and items per page

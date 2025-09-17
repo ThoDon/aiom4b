@@ -5,9 +5,9 @@ A modern Python application that converts MP3 files to M4B format using FFmpeg, 
 ## Features
 
 - 🎵 **MP3 to M4B Conversion**: High-quality audio conversion using FFmpeg
-- 📁 **Multiple Folder Support**: Process multiple source folders simultaneously
+- 📁 **Multiple Folder Support**: Process multiple source folders as separate jobs or combined
 - 🔄 **Recursive Processing**: Automatically discovers MP3 files in subdirectories
-- 💾 **Backup Safety**: Creates timestamped backups before processing
+- 💾 **Backup Safety**: Creates timestamped backups before processing (configurable)
 - 🚀 **High Performance**: Utilizes all available CPU cores for faster conversion
 - 🌐 **REST API**: Full REST API for integration with other applications
 - 💻 **CLI Interface**: Rich command-line interface with progress tracking
@@ -98,10 +98,15 @@ poetry run python -m aiom4b.cli status
 # List source folders
 curl http://localhost:8000/api/v1/folders
 
-# Start conversion
+# Start conversion (each folder creates separate M4B)
 curl -X POST http://localhost:8000/api/v1/convert \
   -H "Content-Type: application/json" \
-  -d '{"source_folders": ["/path/to/audiobook"], "output_filename": "my_book.m4b"}'
+  -d '{
+    "folder_conversions": {
+      "/path/to/book1": "book1.m4b",
+      "/path/to/book2": "book2.m4b"
+    }
+  }'
 
 # Check job status
 curl http://localhost:8000/api/v1/jobs/{job_id}
@@ -115,8 +120,9 @@ curl http://localhost:8000/api/v1/download/{job_id} -o my_book.m4b
 The web interface provides a modern, responsive UI for managing conversions:
 
 - 📁 **Folder Management**: Browse and select source folders
-- 🎯 **Job Creation**: Start new conversion jobs with custom settings
-- 📊 **Progress Tracking**: Real-time job status and progress updates
+- 🎯 **Multiple Job Creation**: Start separate conversion jobs for each folder with individual settings
+- 📝 **Individual Filenames**: Set custom output filenames for each selected folder
+- 📊 **Progress Tracking**: Real-time job status and progress updates for all active jobs
 - 📥 **File Download**: Download converted M4B files directly
 - 📱 **Responsive Design**: Works on desktop, tablet, and mobile
 
@@ -261,6 +267,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📖 **Documentation**: [Project Wiki](https://github.com/your-org/aiom4b/wiki)
 
 ## Changelog
+
+### v0.2.0 (Latest)
+
+- **Multiple Folder Processing**: Each folder now creates separate conversion jobs and M4B files
+- **Individual Filename Configuration**: Set custom output filenames for each selected folder in the UI
+- **Backup Functionality**: Automatic timestamped backups created before processing (configurable)
+- **New API Endpoint**: `/convert/multiple` for processing multiple folders as separate jobs
+- **Enhanced UI**: Individual filename inputs for each selected folder
+- **Improved Documentation**: Updated API and UI documentation
 
 ### v0.1.0
 

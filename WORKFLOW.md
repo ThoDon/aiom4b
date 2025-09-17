@@ -31,10 +31,11 @@ This document describes the complete workflow from input MP3 folders to output M
 
 ### 2.1 Backup Creation
 
-- **Automatic Backup**: Creates timestamped backup before processing
+- **Automatic Backup**: Creates timestamped backup before processing (enabled by default)
 - **Backup Location**: `data/backup/{folder_name}_{timestamp}/`
 - **Backup Contents**: Complete folder structure with all files
 - **Backup Metadata**: Records backup creation time and source
+- **Backup Control**: Controlled by `BACKUP_ENABLED` environment variable
 
 ### 2.2 Backup Safety
 

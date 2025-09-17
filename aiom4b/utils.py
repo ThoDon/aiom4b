@@ -68,8 +68,61 @@ def format_file_size(size_bytes: int) -> str:
 
 
 def sanitize_filename(filename: str) -> str:
-    """Sanitize filename by removing invalid characters."""
+    """Sanitize filename by removing invalid characters and cleaning up the name."""
+    import re
+    
+    # Remove invalid characters
     invalid_chars = '<>:"/\\|?*'
     for char in invalid_chars:
         filename = filename.replace(char, '_')
-    return filename.strip()
+    
+    # Remove or replace other problematic characters
+    filename = re.sub(r'[^\w\s\-_\.]', '_', filename)
+    
+    # Clean up multiple underscores and spaces
+    filename = re.sub(r'[_\s]+', '_', filename)
+    
+    # Remove leading/trailing underscores and spaces
+    filename = filename.strip('_ ')
+    
+    # Ensure it's not empty
+    if not filename:
+        filename = "converted"
+    
+    return filename
+
+
+def generate_output_filename_from_folders(source_folders: List[str]) -> str:
+    """Generate a clean output filename from source folder names."""
+    if not source_folders:
+        return "converted"
+    
+    # If only one folder, use its name
+    if len(source_folders) == 1:
+        folder_path = Path(source_folders[0])
+        folder_name = folder_path.name
+        
+        # Handle edge cases where the path doesn't have a meaningful name
+        # Check if the path ends with just the name (indicating it's a meaningful folder)
+        if (not folder_name or 
+            folder_name in ['/', '\\'] or 
+            not source_folders[0].endswith(folder_name) or
+            len(folder_name) < 2):  # Very short names might not be meaningful
+            return "converted"
+            
+        sanitized = sanitize_filename(folder_name)
+        return sanitized if sanitized != "converted" else "converted"
+    
+    # For multiple folders, create a combined name
+    folder_names = []
+    for folder in source_folders:
+        folder_name = Path(folder).name
+        sanitized = sanitize_filename(folder_name)
+        if sanitized != "converted":  # Only include valid folder names
+            folder_names.append(sanitized)
+    
+    if not folder_names:
+        return "converted"
+    
+    combined_name = "_and_".join(folder_names)
+    return sanitize_filename(combined_name)

@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -64,9 +64,7 @@ class SourceFolder(BaseModel):
 class ConversionRequest(BaseModel):
     """Model for conversion request."""
     
-    source_folders: List[str] = Field(..., description="List of source folder paths")
-    output_filename: Optional[str] = Field(None, description="Output filename (optional)")
-
+    folder_conversions: Dict[str, Optional[str]] = Field(..., description="Dictionary mapping folder paths to output filenames (None for auto-generated)")
 
 class JobResponse(BaseModel):
     """Model for job response."""

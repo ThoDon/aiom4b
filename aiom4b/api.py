@@ -46,15 +46,17 @@ async def list_source_folders() -> List[SourceFolder]:
     return folders
 
 
-@router.post("/convert", response_model=JobResponse)
+@router.post("/convert", response_model=List[JobResponse])
 async def start_conversion(
     request: ConversionRequest,
     background_tasks: BackgroundTasks
-) -> JobResponse:
-    """Start a new conversion job."""
+) -> List[JobResponse]:
+    """Start conversion jobs (one per folder). Each folder is treated as a separate unit."""
     
-    # Validate source folders
-    for folder_path in request.source_folders:
+    job_responses = []
+    
+    for folder_path, output_filename in request.folder_conversions.items():
+        # Validate source folder
         if not Path(folder_path).exists():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -67,24 +69,28 @@ async def start_conversion(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"No MP3 files found in folder: {folder_path}"
             )
+        
+        # Create job in database (one per folder)
+        job_create = JobCreate(input_folders=[folder_path])
+        job_db = job_service.create_job(job_create)
+        
+        # Start conversion in background (one per folder)
+        background_tasks.add_task(
+            _run_conversion_task,
+            job_db.id,
+            [folder_path],
+            output_filename
+        )
+        
+        job_responses.append(JobResponse(
+            job_id=job_db.id,
+            status=job_db.status,
+            message=f"Conversion job started with ID: {job_db.id}"
+        ))
     
-    # Create job in database
-    job_create = JobCreate(input_folders=request.source_folders)
-    job_db = job_service.create_job(job_create)
-    
-    # Start conversion in background
-    background_tasks.add_task(
-        _run_conversion_task,
-        job_db.id,
-        request.source_folders,
-        request.output_filename
-    )
-    
-    return JobResponse(
-        job_id=job_db.id,
-        status=job_db.status,
-        message=f"Conversion job started with ID: {job_db.id}"
-    )
+    return job_responses
+
+
 
 
 
