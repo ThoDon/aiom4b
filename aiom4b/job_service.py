@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlmodel import Session, select, and_, or_
 
 from .database import get_session_sync
-from .models import JobDB, JobStatus, ConversionJob, JobCreate, JobUpdate
+from .models import JobDB, JobStatus, JobType, ConversionJob, JobCreate, JobUpdate, TaggingJob, TaggingJobCreate, TaggingJobUpdate
 
 
 class JobService:
@@ -18,9 +18,22 @@ class JobService:
         self.session = get_session_sync()
     
     def create_job(self, job_data: JobCreate) -> JobDB:
-        """Create a new job in the database."""
+        """Create a new conversion job in the database."""
         job = JobDB(
+            job_type=JobType.CONVERSION,
             input_folders=json.dumps(job_data.input_folders),
+            status=JobStatus.QUEUED
+        )
+        self.session.add(job)
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+    
+    def create_tagging_job(self, job_data: TaggingJobCreate) -> JobDB:
+        """Create a new tagging job in the database."""
+        job = JobDB(
+            job_type=JobType.TAGGING,
+            input_folders=json.dumps([job_data.file_path]),
             status=JobStatus.QUEUED
         )
         self.session.add(job)
@@ -36,6 +49,7 @@ class JobService:
     def get_jobs(
         self, 
         status: Optional[JobStatus] = None,
+        job_type: Optional[JobType] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[JobDB]:
@@ -44,6 +58,9 @@ class JobService:
         
         if status:
             statement = statement.where(JobDB.status == status)
+        
+        if job_type:
+            statement = statement.where(JobDB.job_type == job_type)
         
         statement = statement.order_by(JobDB.created_at.desc()).offset(offset).limit(limit)
         return list(self.session.exec(statement))
@@ -123,6 +140,23 @@ class JobService:
             error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
             progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
             output_path=job_db.output_file
+        )
+    
+    def to_tagging_job(self, job_db: JobDB) -> TaggingJob:
+        """Convert JobDB to TaggingJob for API responses."""
+        input_folders = json.loads(job_db.input_folders) if job_db.input_folders else []
+        file_path = input_folders[0] if input_folders else ""
+        
+        return TaggingJob(
+            id=job_db.id,
+            file_path=file_path,
+            status=job_db.status,
+            created_at=job_db.created_at,
+            started_at=job_db.start_time,
+            completed_at=job_db.end_time,
+            error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
+            progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
+            metadata=None  # TODO: Load metadata from tagged file if available
         )
 
 

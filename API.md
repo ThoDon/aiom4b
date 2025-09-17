@@ -18,6 +18,8 @@ Currently no authentication is required. In production, implement proper API key
 
 ### Endpoints
 
+## Conversion Endpoints
+
 #### 1. List Source Folders
 
 **GET** `/folders`
@@ -473,6 +475,292 @@ Output: /app/data/output/book1.m4b
 Input folders (2):
   • /path/to/folder1
   • /path/to/folder2
+```
+
+## Tagging Endpoints
+
+### 1. List Untagged Files
+
+**GET** `/files/untagged`
+
+Returns all converted but untagged M4B files.
+
+**Query Parameters:**
+
+- `page` (optional) - Page number (default: 1)
+- `per_page` (optional) - Items per page (default: 50, max: 100)
+
+**Response:**
+
+```json
+{
+  "files": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "file_path": "/path/to/output/book1.m4b",
+      "asin": null,
+      "title": null,
+      "author": null,
+      "narrator": null,
+      "series": null,
+      "series_part": null,
+      "description": null,
+      "cover_url": null,
+      "cover_path": null,
+      "is_tagged": false,
+      "created_at": "2024-01-15T10:30:00",
+      "updated_at": "2024-01-15T10:30:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 50
+}
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/files/untagged?page=1&per_page=10"
+```
+
+### 2. Create Tagging Job
+
+**POST** `/jobs/tagging`
+
+Creates a new tagging job for a file.
+
+**Request Body:**
+
+```json
+{
+  "file_path": "/path/to/output/book1.m4b",
+  "asin": "B08N5WRWNW"
+}
+```
+
+**Response:**
+
+```json
+{
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "status": "queued",
+  "message": "Tagging job started with ID: 123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/jobs/tagging" \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/path/to/output/book1.m4b"}'
+```
+
+### 3. Search Audible API
+
+**POST** `/files/{file_id}/search`
+
+Search Audible API for metadata using a query.
+
+**Query Parameters:**
+
+- `query` (required) - Search query string
+
+**Response:**
+
+```json
+[
+  {
+    "title": "The Great Book",
+    "author": "John Author",
+    "narrator": "Jane Narrator",
+    "series": "Great Series",
+    "asin": "B08N5WRWNW",
+    "locale": "com"
+  }
+]
+```
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/123e4567-e89b-12d3-a456-426614174000/search?query=The Great Book"
+```
+
+### 4. Apply Metadata to File
+
+**POST** `/files/{file_id}/apply`
+
+Apply selected metadata to a file.
+
+**Query Parameters:**
+
+- `asin` (required) - ASIN of the book to apply
+
+**Response:**
+
+```json
+{
+  "message": "Metadata applied successfully"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/files/123e4567-e89b-12d3-a456-426614174000/apply?asin=B08N5WRWNW"
+```
+
+### 5. List Tagging Jobs
+
+**GET** `/jobs/tagging`
+
+Returns all tagging jobs.
+
+**Response:**
+
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "file_path": "/path/to/output/book1.m4b",
+    "status": "completed",
+    "created_at": "2024-01-15T10:30:00",
+    "started_at": "2024-01-15T10:30:05",
+    "completed_at": "2024-01-15T10:35:28",
+    "error_message": null,
+    "progress": 100.0,
+    "metadata": null
+  }
+]
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/jobs/tagging"
+```
+
+### 6. Get Tagging Job Details
+
+**GET** `/jobs/tagging/{job_id}`
+
+Returns detailed information about a specific tagging job.
+
+**Response:**
+
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "file_path": "/path/to/output/book1.m4b",
+  "status": "completed",
+  "created_at": "2024-01-15T10:30:00",
+  "started_at": "2024-01-15T10:30:05",
+  "completed_at": "2024-01-15T10:35:28",
+  "error_message": null,
+  "progress": 100.0,
+  "metadata": null
+}
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/jobs/tagging/123e4567-e89b-12d3-a456-426614174000"
+```
+
+### 7. Delete Tagged File
+
+**DELETE** `/files/{file_id}`
+
+Delete a tagged file record.
+
+**Response:**
+
+```json
+{
+  "message": "File 123e4567-e89b-12d3-a456-426614174000 deleted successfully"
+}
+```
+
+**Example:**
+
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/files/123e4567-e89b-12d3-a456-426614174000"
+```
+
+## Tagging CLI Commands
+
+### 1. List Files
+
+**Usage:**
+
+```bash
+poetry run python -m aiom4b.cli files list
+```
+
+**Output:**
+
+```
+Converted Files
+┌─────────────┬─────────────────┬─────────┬─────────────┬─────────────┬─────────────────┐
+│ ID          │ Filename        │ Tagged  │ Title       │ Author      │ Created         │
+├─────────────┼─────────────────┼─────────┼─────────────┼─────────────┼─────────────────┤
+│ 123e4567... │ book1.m4b       │ ❌ No   │ Unknown     │ Unknown     │ 2024-01-15 10:30│
+│ 9876543...  │ book2.m4b       │ ✅ Yes  │ The Great   │ John Author │ 2024-01-15 11:00│
+└─────────────┴─────────────────┴─────────┴─────────────┴─────────────┴─────────────────┘
+```
+
+### 2. Search Audible
+
+**Usage:**
+
+```bash
+poetry run python -m aiom4b.cli files search <file_id> --query "search query"
+```
+
+**Example:**
+
+```bash
+poetry run python -m aiom4b.cli files search 123e4567-e89b-12d3-a456-426614174000 --query "The Great Book"
+```
+
+**Output:**
+
+```
+Searching Audible for: The Great Book
+
+Audible Search Results
+┌───────┬─────────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
+│ Index │ Title           │ Author      │ Narrator    │ Series      │ ASIN        │
+├───────┼─────────────────┼─────────────┼─────────────┼─────────────┼─────────────┤
+│ 1     │ The Great Book  │ John Author │ Jane Narrator│ Great Series│ B08N5WRWNW  │
+└───────┴─────────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
+
+Found 1 results. Use 'files tag 123e4567-e89b-12d3-a456-426614174000' to apply metadata.
+```
+
+### 3. Tag File
+
+**Usage:**
+
+```bash
+poetry run python -m aiom4b.cli files tag <file_id>
+```
+
+**Example:**
+
+```bash
+poetry run python -m aiom4b.cli files tag 123e4567-e89b-12d3-a456-426614174000
+```
+
+**Output:**
+
+```
+Tagging job started with ID: 123e4567-e89b-12d3-a456-426614174000
+File: book1.m4b
+Use 'jobs list' to check progress.
 ```
 
 ## Error Handling

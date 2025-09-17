@@ -11,8 +11,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .api import list_source_folders, start_conversion, list_jobs
 from .converter import converter
-from .models import ConversionRequest, JobStatus
+from .models import ConversionRequest, JobStatus, JobType, TaggingJobCreate
 from .job_service import job_service
+from .tagging_service import tagging_service
 from .database import create_db_and_tables
 from .utils import get_folder_info, get_mp3_files
 
@@ -261,19 +262,25 @@ def _list_jobs(status_filter: Optional[str] = None) -> None:
             return
         
         # Create table
-        table = Table(title="Conversion Jobs")
+        table = Table(title="All Jobs")
         table.add_column("ID", style="cyan", width=12)
+        table.add_column("Type", style="blue", width=10)
         table.add_column("Status", style="green", width=10)
-        table.add_column("Input Folders", style="blue")
+        table.add_column("Input", style="yellow")
         table.add_column("Output File", style="magenta")
-        table.add_column("Created", style="yellow", width=16)
+        table.add_column("Created", style="white", width=16)
         table.add_column("Duration", style="white", width=10)
         
         for job_db in jobs_db:
             # Parse input folders
             import json
             input_folders = json.loads(job_db.input_folders) if job_db.input_folders else []
-            folder_display = f"{len(input_folders)} folder(s)" if input_folders else "None"
+            
+            # Input display based on job type
+            if job_db.job_type == JobType.CONVERSION:
+                input_display = f"{len(input_folders)} folder(s)" if input_folders else "None"
+            else:  # TAGGING
+                input_display = Path(input_folders[0]).name if input_folders else "None"
             
             # Status color
             status_color = {
@@ -282,6 +289,12 @@ def _list_jobs(status_filter: Optional[str] = None) -> None:
                 JobStatus.COMPLETED: "green",
                 JobStatus.FAILED: "red"
             }.get(job_db.status, "white")
+            
+            # Job type color
+            type_color = {
+                JobType.CONVERSION: "blue",
+                JobType.TAGGING: "green"
+            }.get(job_db.job_type, "white")
             
             # Output file display
             output_display = "N/A"
@@ -299,8 +312,9 @@ def _list_jobs(status_filter: Optional[str] = None) -> None:
             
             table.add_row(
                 str(job_db.id)[:8] + "...",
+                f"[{type_color}]{job_db.job_type.value}[/{type_color}]",
                 f"[{status_color}]{job_db.status.value}[/{status_color}]",
-                folder_display,
+                input_display,
                 output_display,
                 job_db.created_at.strftime("%Y-%m-%d %H:%M"),
                 duration
@@ -370,6 +384,162 @@ def _clear_jobs(days_old: int) -> None:
         
     except Exception as e:
         console.print(f"[red]Error clearing jobs: {e}[/red]")
+        raise typer.Exit(1)
+
+
+# Tagging commands
+@app.command()
+def files(
+    action: str = typer.Argument(..., help="Action: list, search, tag"),
+    file_id: Optional[str] = typer.Argument(None, help="File ID for 'search' or 'tag' actions"),
+    query: Optional[str] = typer.Option(None, "--query", "-q", help="Search query for 'search' action")
+):
+    """Manage converted files and tagging."""
+    
+    if action == "list":
+        _list_files()
+    elif action == "search":
+        if not file_id or not query:
+            console.print("[red]Error: File ID and query are required for 'search' action[/red]")
+            raise typer.Exit(1)
+        _search_audible(file_id, query)
+    elif action == "tag":
+        if not file_id:
+            console.print("[red]Error: File ID is required for 'tag' action[/red]")
+            raise typer.Exit(1)
+        _tag_file(file_id)
+    else:
+        console.print(f"[red]Error: Unknown action '{action}'. Use: list, search, tag[/red]")
+        raise typer.Exit(1)
+
+
+def _list_files() -> None:
+    """List all converted files with tag status."""
+    
+    try:
+        files = tagging_service.get_untagged_files(limit=100)
+        
+        if not files:
+            console.print("[yellow]No converted files found.[/yellow]")
+            return
+        
+        table = Table(title="Converted Files")
+        table.add_column("ID", style="cyan", width=12)
+        table.add_column("Filename", style="blue")
+        table.add_column("Tagged", style="green", width=8)
+        table.add_column("Title", style="yellow")
+        table.add_column("Author", style="magenta")
+        table.add_column("Created", style="white", width=16)
+        
+        for file in files:
+            filename = Path(file.file_path).name
+            tagged_status = "✅ Yes" if file.is_tagged else "❌ No"
+            title = file.title or "Unknown"
+            author = file.author or "Unknown"
+            
+            table.add_row(
+                str(file.id)[:8] + "...",
+                filename,
+                tagged_status,
+                title,
+                author,
+                file.created_at.strftime("%Y-%m-%d %H:%M")
+            )
+        
+        console.print(table)
+        
+    except Exception as e:
+        console.print(f"[red]Error listing files: {e}[/red]")
+        raise typer.Exit(1)
+
+
+def _search_audible(file_id: str, query: str) -> None:
+    """Search Audible API for metadata."""
+    
+    try:
+        from uuid import UUID
+        
+        # Parse UUID
+        try:
+            file_uuid = UUID(file_id)
+        except ValueError:
+            console.print(f"[red]Error: Invalid file ID format: {file_id}[/red]")
+            raise typer.Exit(1)
+        
+        # Verify file exists
+        tagged_file = tagging_service.get_tagged_file(file_uuid)
+        if not tagged_file:
+            console.print(f"[red]Error: File not found: {file_id}[/red]")
+            raise typer.Exit(1)
+        
+        console.print(f"[blue]Searching Audible for: {query}[/blue]")
+        
+        # Search Audible
+        results = tagging_service.search_audible(query)
+        
+        if not results:
+            console.print("[yellow]No results found.[/yellow]")
+            return
+        
+        table = Table(title="Audible Search Results")
+        table.add_column("Index", style="cyan", width=6)
+        table.add_column("Title", style="blue")
+        table.add_column("Author", style="green")
+        table.add_column("Narrator", style="yellow")
+        table.add_column("Series", style="magenta")
+        table.add_column("ASIN", style="white", width=12)
+        
+        for i, result in enumerate(results, 1):
+            table.add_row(
+                str(i),
+                result.title,
+                result.author,
+                result.narrator or "N/A",
+                result.series or "N/A",
+                result.asin
+            )
+        
+        console.print(table)
+        console.print(f"\n[green]Found {len(results)} results. Use 'files tag {file_id}' to apply metadata.[/green]")
+        
+    except Exception as e:
+        console.print(f"[red]Error searching Audible: {e}[/red]")
+        raise typer.Exit(1)
+
+
+def _tag_file(file_id: str) -> None:
+    """Start tagging process for a file."""
+    
+    try:
+        from uuid import UUID
+        
+        # Parse UUID
+        try:
+            file_uuid = UUID(file_id)
+        except ValueError:
+            console.print(f"[red]Error: Invalid file ID format: {file_id}[/red]")
+            raise typer.Exit(1)
+        
+        # Verify file exists
+        tagged_file = tagging_service.get_tagged_file(file_uuid)
+        if not tagged_file:
+            console.print(f"[red]Error: File not found: {file_id}[/red]")
+            raise typer.Exit(1)
+        
+        if tagged_file.is_tagged:
+            console.print("[yellow]File is already tagged.[/yellow]")
+            return
+        
+        # Create tagging job
+        job_data = TaggingJobCreate(file_path=tagged_file.file_path)
+        job_db = job_service.create_tagging_job(job_data)
+        
+        console.print(f"[green]Tagging job started with ID: {job_db.id}[/green]")
+        console.print(f"[blue]File: {Path(tagged_file.file_path).name}[/blue]")
+        console.print("[yellow]Use 'jobs list' to check progress.[/yellow]")
+        
+    except Exception as e:
+        console.print(f"[red]Error starting tagging job: {e}[/red]")
         raise typer.Exit(1)
 
 

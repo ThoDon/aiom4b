@@ -12,6 +12,7 @@ import {
   Music,
   Play,
   SettingsIcon,
+  Tag,
 } from "lucide-react";
 import * as React from "react";
 
@@ -41,6 +42,11 @@ const data = {
       title: "Convert",
       url: "/",
       icon: Play,
+    },
+    {
+      title: "Tagging",
+      url: "/tagging",
+      icon: Tag,
     },
     {
       title: "Jobs",

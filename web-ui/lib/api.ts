@@ -50,6 +50,57 @@ export interface JobListResponse {
   per_page: number;
 }
 
+// Tagging types
+export interface TaggedFile {
+  id: string;
+  file_path: string;
+  asin?: string;
+  title?: string;
+  author?: string;
+  narrator?: string;
+  series?: string;
+  series_part?: string;
+  description?: string;
+  cover_url?: string;
+  cover_path?: string;
+  is_tagged: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaggedFileListResponse {
+  files: TaggedFile[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface AudibleSearchResult {
+  title: string;
+  author: string;
+  narrator?: string;
+  series?: string;
+  asin: string;
+  locale: string;
+}
+
+export interface TaggingJob {
+  id: string;
+  file_path: string;
+  status: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+  progress: number;
+  metadata?: any;
+}
+
+export interface TaggingJobCreate {
+  file_path: string;
+  asin?: string;
+}
+
 // API functions
 export const apiService = {
   // Get all source folders
@@ -125,6 +176,62 @@ export const apiService = {
   // Cancel job
   cancelJob: async (jobId: string): Promise<{ message: string }> => {
     const response = await api.delete(`/jobs/${jobId}`);
+    return response.data;
+  },
+
+  // Tagging API functions
+  // Get untagged files
+  getUntaggedFiles: async (params?: {
+    page?: number;
+    per_page?: number;
+  }): Promise<TaggedFileListResponse> => {
+    const response = await api.get("/files/untagged", { params });
+    return response.data;
+  },
+
+  // Create tagging job
+  createTaggingJob: async (jobData: TaggingJobCreate): Promise<JobResponse> => {
+    const response = await api.post("/jobs/tagging", jobData);
+    return response.data;
+  },
+
+  // Search Audible API
+  searchAudible: async (
+    fileId: string,
+    query: string
+  ): Promise<AudibleSearchResult[]> => {
+    const response = await api.post(`/files/${fileId}/search`, null, {
+      params: { query },
+    });
+    return response.data;
+  },
+
+  // Apply metadata to file
+  applyMetadata: async (
+    fileId: string,
+    asin: string
+  ): Promise<{ message: string }> => {
+    const response = await api.post(`/files/${fileId}/apply`, null, {
+      params: { asin },
+    });
+    return response.data;
+  },
+
+  // Get tagging jobs
+  getTaggingJobs: async (): Promise<TaggingJob[]> => {
+    const response = await api.get("/jobs/tagging");
+    return response.data;
+  },
+
+  // Get tagging job details
+  getTaggingJobDetails: async (jobId: string): Promise<TaggingJob> => {
+    const response = await api.get(`/jobs/tagging/${jobId}`);
+    return response.data;
+  },
+
+  // Delete tagged file
+  deleteTaggedFile: async (fileId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/files/${fileId}`);
     return response.data;
   },
 };

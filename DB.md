@@ -8,11 +8,12 @@ AIOM4B uses SQLite as its database with SQLModel as the ORM for persistent job t
 
 ### Jobs Table
 
-The `jobs` table stores all conversion job records:
+The `jobs` table stores all job records (conversion and tagging):
 
 ```sql
 CREATE TABLE jobs (
     id UUID PRIMARY KEY,
+    job_type VARCHAR(20) NOT NULL DEFAULT 'conversion',
     status VARCHAR(20) NOT NULL DEFAULT 'queued',
     input_folders TEXT NOT NULL,
     output_file TEXT,
@@ -24,16 +25,59 @@ CREATE TABLE jobs (
 );
 ```
 
+### Tagged Files Table
+
+The `tagged_files` table stores metadata for M4B files:
+
+```sql
+CREATE TABLE tagged_files (
+    id UUID PRIMARY KEY,
+    file_path TEXT NOT NULL,
+    asin TEXT,
+    title TEXT,
+    author TEXT,
+    narrator TEXT,
+    series TEXT,
+    series_part TEXT,
+    description TEXT,
+    cover_url TEXT,
+    cover_path TEXT,
+    is_tagged BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ### Field Descriptions
 
+#### Jobs Table
+
 - **id**: UUID primary key, auto-generated for each job
+- **job_type**: Job type enum (`conversion`, `tagging`)
 - **status**: Job status enum (`queued`, `running`, `completed`, `failed`)
-- **input_folders**: JSON string containing list of input folder paths
+- **input_folders**: JSON string containing list of input folder paths (for conversion) or single file path (for tagging)
 - **output_file**: Path to the generated .m4b file (null until completion)
 - **start_time**: When the job started processing (null until started)
 - **end_time**: When the job completed or failed (null until finished)
 - **log**: Error messages or additional information (optional)
 - **created_at**: Job creation timestamp
+- **updated_at**: Last modification timestamp
+
+#### Tagged Files Table
+
+- **id**: UUID primary key, auto-generated for each file record
+- **file_path**: Path to the M4B file
+- **asin**: Audible ASIN identifier
+- **title**: Book title
+- **author**: Author name
+- **narrator**: Narrator name
+- **series**: Series name
+- **series_part**: Series part number
+- **description**: Book description
+- **cover_url**: Cover image URL from Audible
+- **cover_path**: Local cover image path
+- **is_tagged**: Whether the file has been tagged with metadata
+- **created_at**: Record creation timestamp
 - **updated_at**: Last modification timestamp
 
 ## ORM Models
@@ -42,17 +86,42 @@ CREATE TABLE jobs (
 
 ```python
 class JobDB(SQLModel, table=True):
-    """Database model for conversion jobs."""
+    """Database model for jobs (conversion and tagging)."""
 
     __tablename__ = "jobs"
 
     id: UUID = SQLField(primary_key=True, default_factory=uuid4)
+    job_type: JobType = SQLField(default=JobType.CONVERSION)
     status: JobStatus = SQLField(default=JobStatus.QUEUED)
     input_folders: str = SQLField(description="JSON string of input folders")
     output_file: Optional[str] = SQLField(default=None, description="Path to generated .m4b")
     start_time: Optional[datetime] = SQLField(default=None)
     end_time: Optional[datetime] = SQLField(default=None)
     log: Optional[str] = SQLField(default=None, description="Error/info messages")
+    created_at: datetime = SQLField(default_factory=datetime.utcnow)
+    updated_at: datetime = SQLField(default_factory=datetime.utcnow)
+```
+
+### TaggedFileDB (SQLModel)
+
+```python
+class TaggedFileDB(SQLModel, table=True):
+    """Database model for tagged files."""
+
+    __tablename__ = "tagged_files"
+
+    id: UUID = SQLField(primary_key=True, default_factory=uuid4)
+    file_path: str = SQLField(description="Path to the M4B file")
+    asin: Optional[str] = SQLField(default=None, description="Audible ASIN")
+    title: Optional[str] = SQLField(default=None, description="Book title")
+    author: Optional[str] = SQLField(default=None, description="Author name")
+    narrator: Optional[str] = SQLField(default=None, description="Narrator name")
+    series: Optional[str] = SQLField(default=None, description="Series name")
+    series_part: Optional[str] = SQLField(default=None, description="Series part number")
+    description: Optional[str] = SQLField(default=None, description="Book description")
+    cover_url: Optional[str] = SQLField(default=None, description="Cover image URL")
+    cover_path: Optional[str] = SQLField(default=None, description="Local cover image path")
+    is_tagged: bool = SQLField(default=False, description="Whether file has been tagged")
     created_at: datetime = SQLField(default_factory=datetime.utcnow)
     updated_at: datetime = SQLField(default_factory=datetime.utcnow)
 ```
@@ -67,6 +136,16 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+```
+
+### JobType Enum
+
+```python
+class JobType(str, Enum):
+    """Job type enumeration."""
+
+    CONVERSION = "conversion"
+    TAGGING = "tagging"
 ```
 
 ## Database Configuration

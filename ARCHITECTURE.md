@@ -46,6 +46,8 @@ aiom4b/
 
 ### 2. REST API (`api.py`)
 
+#### Conversion Endpoints
+
 - **GET /api/v1/folders** - List available source folders
 - **POST /api/v1/convert** - Start conversion job
 - **POST /api/v1/jobs** - Create new job
@@ -55,12 +57,30 @@ aiom4b/
 - **POST /api/v1/jobs/clear** - Clear old jobs
 - **GET /api/v1/download/{job_id}** - Download converted file
 
+#### Tagging Endpoints
+
+- **GET /api/v1/files/untagged** - List all untagged M4B files
+- **POST /api/v1/jobs/tagging** - Create a tagging job
+- **POST /api/v1/files/{file_id}/search** - Search Audible API for metadata
+- **POST /api/v1/files/{file_id}/apply** - Apply selected metadata to file
+- **GET /api/v1/jobs/tagging** - List all tagging jobs
+- **GET /api/v1/jobs/tagging/{job_id}** - Get tagging job details
+- **DELETE /api/v1/files/{file_id}** - Delete a tagged file record
+
 ### 3. CLI Interface (`cli.py`)
+
+#### Conversion Commands
 
 - **convert** - Convert MP3 folders to M4B
 - **list** - Show available source folders
 - **status** - Display job status and progress
 - **jobs** - Comprehensive job management (list, show, clear)
+
+#### Tagging Commands
+
+- **files list** - List converted files with tag status
+- **files search** - Search Audible API for metadata
+- **files tag** - Start tagging process for a file
 
 ### 4. Conversion Engine (`converter.py`)
 
@@ -72,7 +92,15 @@ aiom4b/
 
 ### 5. Data Models (`models.py`)
 
-- `JobDB` - SQLModel database model for persistent storage
+#### Core Models
+
+- `JobDB` - SQLModel database model for persistent storage (extended with job_type)
+- `TaggedFileDB` - SQLModel database model for tagged files
+- `JobStatus` enum for job states
+- `JobType` enum for job types (conversion, tagging)
+
+#### Conversion Models
+
 - `ConversionJob` - Pydantic model for API responses
 - `SourceFolder` - Folder information
 - `ConversionRequest` - API request model
@@ -80,7 +108,17 @@ aiom4b/
 - `JobUpdate` - Job update model
 - `JobListResponse` - Paginated job list response
 - `JobResponse` - API response model
-- `JobStatus` enum for job states
+
+#### Tagging Models
+
+- `TaggedFile` - Pydantic model for tagged files
+- `AudibleSearchResult` - Audible API search results
+- `AudibleBookDetails` - Detailed book metadata
+- `TaggingJob` - Pydantic model for tagging jobs
+- `TaggingRequest` - Tagging request model
+- `TaggingJobCreate` - Tagging job creation model
+- `TaggingJobUpdate` - Tagging job update model
+- `TaggedFileListResponse` - Paginated tagged file list response
 
 ### 6. Database Layer (`database.py`)
 
@@ -93,19 +131,29 @@ aiom4b/
 ### 7. Job Service (`job_service.py`)
 
 - Database operations for job management
-- CRUD operations for job records
-- Job filtering and pagination
+- CRUD operations for job records (conversion and tagging)
+- Job filtering and pagination by type and status
 - Data conversion between database and API models
 - Cleanup operations for old jobs
+- Support for both conversion and tagging job types
 
-### 8. Configuration (`config.py`)
+### 8. Tagging Service (`tagging_service.py`)
+
+- Audible API integration for metadata fetching
+- File tagging operations using mutagen
+- Search functionality across multiple Audible locales
+- Metadata processing and validation
+- Cover art download and embedding
+- Tagged file database management
+
+### 9. Configuration (`config.py`)
 
 - Environment-based configuration
 - Directory structure setup
 - Processing settings (CPU usage, file limits)
 - Backup configuration
 
-### 9. Utilities (`utils.py`)
+### 10. Utilities (`utils.py`)
 
 - File system operations
 - MP3 file discovery
@@ -113,14 +161,15 @@ aiom4b/
 - File size formatting
 - Filename sanitization
 
-### 10. Web UI (`web-ui/`)
+### 11. Web UI (`web-ui/`)
 
 - Next.js 15 React application
 - TypeScript for type safety
 - Tailwind CSS for styling
 - React Query for API state management
-- Job management dashboard
+- Job management dashboard with conversion and tagging tabs
 - Real-time job status updates
+- Tagging interface with Audible search integration
 
 ## Dependencies
 
@@ -133,6 +182,8 @@ aiom4b/
 - **SQLModel** - SQL ORM with Pydantic integration
 - **Uvicorn** - ASGI server for FastAPI
 - **Rich** - Terminal formatting and progress bars
+- **Mutagen** - Audio metadata manipulation
+- **Requests** - HTTP library for Audible API integration
 
 ### Development Dependencies
 

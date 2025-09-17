@@ -21,6 +21,8 @@ web-ui/
 │   ├── globals.css        # Global styles
 │   ├── layout.tsx         # Root layout component
 │   ├── page.tsx           # Home page (conversion interface)
+│   ├── tagging/           # Tagging management pages
+│   │   └── page.tsx       # Tagging dashboard
 │   ├── jobs/              # Jobs management pages
 │   │   └── page.tsx       # Jobs dashboard
 │   └── providers.tsx      # React Query provider
@@ -74,16 +76,47 @@ The main conversion interface where users can:
 - `Badge` - Status indicators
 - `Separator` - Visual organization
 
-### 2. Jobs Dashboard (`/jobs`)
+### 2. Tagging Dashboard (`/tagging`)
+
+The tagging management interface provides comprehensive file tagging capabilities:
+
+- **File List**: View all converted but untagged M4B files
+- **Search Interface**: Manual search with custom queries for Audible API
+- **Result Selection**: Choose from multiple search results with book details
+- **Progress Tracking**: Real-time job status updates for tagging operations
+- **File Management**: Delete untagged files if needed
+- **Metadata Display**: Show current tagging status and metadata
+
+#### Key Features
+
+- **Untagged File Detection**: Automatically identifies files needing metadata
+- **Audible API Integration**: Search across multiple Audible locales
+- **Interactive Search**: Custom search queries with real-time results
+- **Metadata Application**: One-click metadata application to files
+- **Job Tracking**: Background job processing with progress monitoring
+- **File Management**: Delete unwanted files from the system
+
+#### Components Used
+
+- `Tabs` - Separate tabs for files and jobs
+- `Table` - File listing with metadata
+- `Dialog` - Search interface modal
+- `Card` - Search result display
+- `Button` - Actions and controls
+- `Progress` - Job progress visualization
+- `Badge` - Status indicators
+
+### 3. Jobs Dashboard (`/jobs`)
 
 Comprehensive job management interface featuring:
 
-- **Job Listing**: Paginated table of all jobs
-- **Filtering**: Filter by status (queued, running, completed, failed)
+- **Job Listing**: Paginated table of all conversion and tagging jobs
+- **Filtering**: Filter by status (queued, running, completed, failed) and type (conversion, tagging)
 - **Search**: Search by filename or folder path
 - **Pagination**: Navigate through large job lists
 - **Job Details**: Modal with detailed job information
 - **Bulk Operations**: Clear old jobs, delete individual jobs
+- **Tabbed Interface**: Separate tabs for conversion and tagging jobs
 
 #### Key Features
 

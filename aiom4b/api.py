@@ -13,9 +13,12 @@ from fastapi.responses import FileResponse
 from .converter import converter
 from .models import (
     ConversionJob, ConversionRequest, JobResponse, SourceFolder,
-    JobCreate, JobUpdate, JobListResponse, JobStatus
+    JobCreate, JobUpdate, JobListResponse, JobStatus, JobType,
+    TaggedFile, TaggedFileListResponse, AudibleSearchResult, AudibleBookDetails,
+    TaggingJob, TaggingJobCreate, TaggingJobUpdate, TaggingRequest
 )
 from .job_service import job_service
+from .tagging_service import tagging_service
 from .utils import get_folder_info, get_mp3_files
 
 router = APIRouter()
@@ -140,20 +143,31 @@ async def download_file(job_id: UUID) -> FileResponse:
 @router.get("/jobs/paginated", response_model=JobListResponse)
 async def list_jobs_paginated(
     status_filter: Optional[JobStatus] = Query(None, alias="status"),
+    job_type_filter: Optional[JobType] = Query(None, alias="type"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100)
 ) -> JobListResponse:
     """List all jobs with optional filtering and pagination."""
     
     offset = (page - 1) * per_page
-    jobs_db = job_service.get_jobs(status=status_filter, limit=per_page, offset=offset)
+    jobs_db = job_service.get_jobs(
+        status=status_filter, 
+        job_type=job_type_filter,
+        limit=per_page, 
+        offset=offset
+    )
     
-    # Convert to API models
-    jobs = [job_service.to_conversion_job(job_db) for job_db in jobs_db]
+    # Convert to API models (only conversion jobs for now)
+    jobs = [job_service.to_conversion_job(job_db) for job_db in jobs_db if job_db.job_type == JobType.CONVERSION]
     
     # Get total count (simplified - in production you'd want a separate count query)
-    total_jobs = job_service.get_jobs(status=status_filter, limit=1000, offset=0)
-    total = len(total_jobs)
+    total_jobs = job_service.get_jobs(
+        status=status_filter, 
+        job_type=job_type_filter,
+        limit=1000, 
+        offset=0
+    )
+    total = len([j for j in total_jobs if j.job_type == JobType.CONVERSION])
     
     return JobListResponse(
         jobs=jobs,
@@ -161,6 +175,34 @@ async def list_jobs_paginated(
         page=page,
         per_page=per_page
     )
+
+
+@router.get("/jobs/tagging", response_model=List[TaggingJob])
+async def list_tagging_jobs() -> List[TaggingJob]:
+    """List all tagging jobs."""
+    
+    jobs_db = job_service.get_jobs(job_type=JobType.TAGGING, limit=100)
+    return [job_service.to_tagging_job(job_db) for job_db in jobs_db]
+
+
+@router.get("/jobs/tagging/{job_id}", response_model=TaggingJob)
+async def get_tagging_job_details(job_id: UUID) -> TaggingJob:
+    """Get detailed information about a specific tagging job."""
+    
+    job_db = job_service.get_job(job_id)
+    if not job_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {job_id}"
+        )
+    
+    if job_db.job_type != JobType.TAGGING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Job {job_id} is not a tagging job"
+        )
+    
+    return job_service.to_tagging_job(job_db)
 
 
 @router.get("/jobs/{job_id}", response_model=ConversionJob)
@@ -225,6 +267,175 @@ async def _run_conversion_task(
             status=JobStatus.COMPLETED,
             end_time=datetime.utcnow(),
             output_file=job.output_path
+        ))
+        
+    except Exception as e:
+        # Update job with error
+        job_service.update_job(job_id, JobUpdate(
+            status=JobStatus.FAILED,
+            end_time=datetime.utcnow(),
+            log=str(e)
+        ))
+
+
+# Tagging endpoints
+@router.get("/files/untagged", response_model=TaggedFileListResponse)
+async def list_untagged_files(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100)
+) -> TaggedFileListResponse:
+    """List all converted but untagged M4B files."""
+    
+    offset = (page - 1) * per_page
+    files = tagging_service.get_untagged_files(limit=per_page, offset=offset)
+    
+    # Get total count (simplified - in production you'd want a separate count query)
+    total_files = tagging_service.get_untagged_files(limit=1000, offset=0)
+    total = len(total_files)
+    
+    return TaggedFileListResponse(
+        files=files,
+        total=total,
+        page=page,
+        per_page=per_page
+    )
+
+
+@router.post("/jobs/tagging", response_model=JobResponse)
+async def create_tagging_job(
+    request: TaggingJobCreate,
+    background_tasks: BackgroundTasks
+) -> JobResponse:
+    """Create a tagging job for a file."""
+    
+    # Validate file exists
+    if not Path(request.file_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File does not exist: {request.file_path}"
+        )
+    
+    # Create job in database
+    job_db = job_service.create_tagging_job(request)
+    
+    # Start tagging in background
+    background_tasks.add_task(
+        _run_tagging_task,
+        job_db.id,
+        request.file_path,
+        request.asin
+    )
+    
+    return JobResponse(
+        job_id=job_db.id,
+        status=job_db.status,
+        message=f"Tagging job started with ID: {job_db.id}"
+    )
+
+
+@router.post("/files/{file_id}/search", response_model=List[AudibleSearchResult])
+async def search_audible_metadata(
+    file_id: UUID,
+    query: str = Query(..., description="Search query for Audible API")
+) -> List[AudibleSearchResult]:
+    """Search Audible API for metadata using a query."""
+    
+    # Verify file exists
+    tagged_file = tagging_service.get_tagged_file(file_id)
+    if not tagged_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found: {file_id}"
+        )
+    
+    # Search Audible
+    results = tagging_service.search_audible(query)
+    return results
+
+
+@router.post("/files/{file_id}/apply")
+async def apply_metadata_to_file(
+    file_id: UUID,
+    asin: str = Query(..., description="ASIN of the book to apply")
+) -> dict:
+    """Apply selected metadata to a file."""
+    
+    # Validate file exists first
+    tagged_file = tagging_service.get_tagged_file(file_id)
+    if not tagged_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID {file_id} not found"
+        )
+    
+    # Get book details from Audible
+    book_details = tagging_service.get_book_details(asin)
+    if not book_details:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not find book details for ASIN: {asin}. The ASIN may be invalid, the book may not be available on Audible, or it may be from a different region."
+        )
+    
+    # Apply metadata to file
+    success = tagging_service.apply_metadata_to_file(file_id, book_details)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to apply metadata to file. Check server logs for details."
+        )
+    
+    return {"message": "Metadata applied successfully"}
+
+
+@router.delete("/files/{file_id}")
+async def delete_tagged_file(file_id: UUID) -> dict:
+    """Delete a tagged file record."""
+    
+    success = tagging_service.delete_tagged_file(file_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found: {file_id}"
+        )
+    
+    return {"message": f"File {file_id} deleted successfully"}
+
+
+async def _run_tagging_task(
+    job_id: UUID,
+    file_path: str,
+    asin: Optional[str] = None
+) -> None:
+    """Background task to run the actual tagging and update the database."""
+    
+    try:
+        # Update job status to running
+        job_service.update_job(job_id, JobUpdate(
+            status=JobStatus.RUNNING,
+            start_time=datetime.utcnow()
+        ))
+        
+        # If ASIN is provided, get book details directly
+        if asin:
+            book_details = tagging_service.get_book_details(asin)
+            if not book_details:
+                raise Exception(f"Could not fetch book details for ASIN: {asin}")
+        else:
+            # TODO: Implement automatic search based on filename
+            # For now, we'll just mark the job as completed without metadata
+            book_details = None
+        
+        # Apply metadata if available
+        if book_details:
+            # Find the tagged file record
+            tagged_file = tagging_service.get_tagged_file_by_path(file_path)
+            if tagged_file:
+                tagging_service.apply_metadata_to_file(tagged_file.id, book_details)
+        
+        # Update job with results
+        job_service.update_job(job_id, JobUpdate(
+            status=JobStatus.COMPLETED,
+            end_time=datetime.utcnow()
         ))
         
     except Exception as e:
