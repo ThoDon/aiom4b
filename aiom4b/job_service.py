@@ -76,6 +76,8 @@ class JobService:
             job.status = job_update.status
         if job_update.output_file is not None:
             job.output_file = job_update.output_file
+        if job_update.backup_paths is not None:
+            job.backup_paths = job_update.backup_paths
         if job_update.start_time is not None:
             job.start_time = job_update.start_time
         if job_update.end_time is not None:
@@ -122,6 +124,7 @@ class JobService:
     def to_conversion_job(self, job_db: JobDB) -> ConversionJob:
         """Convert JobDB to ConversionJob for API responses."""
         input_folders = json.loads(job_db.input_folders) if job_db.input_folders else []
+        backup_paths = json.loads(job_db.backup_paths) if job_db.backup_paths else []
         
         # Extract filename from output_file path
         output_filename = ""
@@ -139,7 +142,8 @@ class JobService:
             completed_at=job_db.end_time,
             error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
             progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
-            output_path=job_db.output_file
+            output_path=job_db.output_file,
+            backup_paths=backup_paths
         )
     
     def to_tagging_job(self, job_db: JobDB) -> TaggingJob:

@@ -61,6 +61,9 @@ class MP3ToM4BConverter:
                     backup_path = create_backup(folder)
                     backup_paths.append(backup_path)
             
+            # Store backup paths in job for later cleanup
+            job.backup_paths = backup_paths
+            
             # Collect all MP3 files
             all_mp3_files = []
             for folder in source_folders:
@@ -105,6 +108,9 @@ class MP3ToM4BConverter:
     ) -> None:
         """Convert MP3 files to M4B using FFmpeg."""
         
+        # Ensure output directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
         # Create input streams
         input_streams = []
         for mp3_file in mp3_files:
@@ -138,7 +144,11 @@ class MP3ToM4BConverter:
             
             if process.returncode != 0:
                 stderr = await process.stderr.read()
-                raise RuntimeError(f"FFmpeg conversion failed: {stderr.decode()}")
+                stdout = await process.stdout.read()
+                error_msg = f"FFmpeg conversion failed (return code: {process.returncode})\n"
+                error_msg += f"STDERR: {stderr.decode()}\n"
+                error_msg += f"STDOUT: {stdout.decode()}"
+                raise RuntimeError(error_msg)
                 
         except Exception as e:
             raise RuntimeError(f"FFmpeg conversion failed: {e}")

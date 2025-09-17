@@ -16,6 +16,7 @@ from .models import (
     TaggedFileDB, TaggedFile, AudibleSearchResult, AudibleBookDetails,
     TaggingJobCreate, TaggingJobUpdate, JobDB, JobType, JobStatus
 )
+from .utils import cleanup_backup_files
 
 
 class TaggingService:
@@ -346,6 +347,9 @@ class TaggingService:
                 print(f"Failed to tag file: {file_path}")
                 return False
             
+            # Store original file path for backup cleanup
+            original_file_path = tagged_file.file_path
+            
             # Move file to organized library structure
             new_path = self.move_to_library(file_path, metadata, cover_path)
             
@@ -366,11 +370,39 @@ class TaggingService:
             self.session.add(tagged_file)
             self.session.commit()
             
+            # Clean up backup files after successful tagging
+            # Use the original file path to find the associated backup files
+            self.cleanup_backup_files_for_output(original_file_path)
+            
             return True
             
         except Exception as e:
             print(f"Error applying metadata to file: {e}")
             return False
+    
+    def cleanup_backup_files_for_output(self, output_file_path: str) -> None:
+        """Find and clean up backup files for a given output file."""
+        try:
+            # Find the conversion job that created this output file
+            statement = select(JobDB).where(
+                and_(
+                    JobDB.job_type == JobType.CONVERSION,
+                    JobDB.output_file == output_file_path,
+                    JobDB.status == JobStatus.COMPLETED
+                )
+            )
+            job = self.session.exec(statement).first()
+            
+            if job and job.backup_paths:
+                import json
+                backup_paths = json.loads(job.backup_paths)
+                cleanup_backup_files(backup_paths)
+                print(f"Cleaned up {len(backup_paths)} backup files for {output_file_path}")
+            else:
+                print(f"No backup files found for {output_file_path}")
+                
+        except Exception as e:
+            print(f"Error cleaning up backup files for {output_file_path}: {e}")
     
     def delete_tagged_file(self, file_id: UUID) -> bool:
         """Delete a tagged file record."""

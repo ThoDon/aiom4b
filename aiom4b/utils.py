@@ -58,6 +58,17 @@ def get_available_cpu_count() -> int:
     return os.cpu_count() or 1
 
 
+def cleanup_backup_files(backup_paths: List[str]) -> None:
+    """Clean up backup files after successful tagging."""
+    for backup_path in backup_paths:
+        try:
+            if Path(backup_path).exists():
+                shutil.rmtree(backup_path)
+                print(f"Cleaned up backup: {backup_path}")
+        except Exception as e:
+            print(f"Failed to clean up backup {backup_path}: {e}")
+
+
 def format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format."""
     for unit in ['B', 'KB', 'MB', 'GB']:

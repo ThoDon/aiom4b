@@ -263,10 +263,12 @@ async def _run_conversion_task(
         )
         
         # Update job with results
+        backup_paths_json = json.dumps(job.backup_paths) if job.backup_paths else None
         job_service.update_job(job_id, JobUpdate(
             status=JobStatus.COMPLETED,
             end_time=datetime.utcnow(),
-            output_file=job.output_path
+            output_file=job.output_path,
+            backup_paths=backup_paths_json
         ))
         
     except Exception as e:
