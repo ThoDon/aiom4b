@@ -39,24 +39,14 @@ const data = {
   },
   navMain: [
     {
-      title: "Convert",
+      title: "Home",
       url: "/",
       icon: Play,
-    },
-    {
-      title: "Tagging",
-      url: "/tagging",
-      icon: Tag,
     },
     {
       title: "Jobs",
       url: "/jobs",
       icon: ListIcon,
-    },
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: LayoutDashboardIcon,
     },
   ],
   navClouds: [

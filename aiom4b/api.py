@@ -15,7 +15,8 @@ from .models import (
     ConversionJob, ConversionRequest, JobResponse, SourceFolder,
     JobCreate, JobUpdate, JobListResponse, JobStatus, JobType,
     TaggedFile, TaggedFileListResponse, AudibleSearchResult, AudibleBookDetails,
-    TaggingJob, TaggingJobCreate, TaggingJobUpdate, TaggingRequest
+    TaggingJob, TaggingJobCreate, TaggingJobUpdate, TaggingRequest,
+    UnifiedJob, UnifiedJobListResponse
 )
 from .job_service import job_service
 from .tagging_service import tagging_service
@@ -183,6 +184,42 @@ async def list_tagging_jobs() -> List[TaggingJob]:
     
     jobs_db = job_service.get_jobs(job_type=JobType.TAGGING, limit=100)
     return [job_service.to_tagging_job(job_db) for job_db in jobs_db]
+
+
+@router.get("/jobs/unified", response_model=UnifiedJobListResponse)
+async def list_unified_jobs(
+    status_filter: Optional[JobStatus] = Query(None, alias="status"),
+    job_type_filter: Optional[JobType] = Query(None, alias="type"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100)
+) -> UnifiedJobListResponse:
+    """List all jobs (conversion and tagging) with optional filtering and pagination."""
+    
+    offset = (page - 1) * per_page
+    
+    # Get jobs with filters
+    jobs_db = job_service.get_jobs(
+        status=status_filter,
+        job_type=job_type_filter,
+        limit=per_page,
+        offset=offset
+    )
+    
+    # Get total count for pagination
+    total_count = job_service.count_jobs(
+        status=status_filter,
+        job_type=job_type_filter
+    )
+    
+    # Convert to unified jobs
+    unified_jobs = [job_service.to_unified_job(job_db) for job_db in jobs_db]
+    
+    return UnifiedJobListResponse(
+        jobs=unified_jobs,
+        total=total_count,
+        page=page,
+        per_page=per_page
+    )
 
 
 @router.get("/jobs/tagging/{job_id}", response_model=TaggingJob)

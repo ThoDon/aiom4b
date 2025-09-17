@@ -237,3 +237,35 @@ class TaggedFileListResponse(BaseModel):
     total: int
     page: int = 1
     per_page: int = 50
+
+
+class UnifiedJob(BaseModel):
+    """Model for unified job (conversion or tagging) API response."""
+    
+    id: UUID
+    job_type: JobType
+    status: JobStatus
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    progress: float = Field(default=0.0, ge=0.0, le=100.0)
+    
+    # Conversion job fields
+    source_folders: Optional[List[str]] = None
+    output_filename: Optional[str] = None
+    output_path: Optional[str] = None
+    backup_paths: Optional[List[str]] = None
+    
+    # Tagging job fields
+    file_path: Optional[str] = None
+    metadata: Optional[AudibleBookDetails] = None
+
+
+class UnifiedJobListResponse(BaseModel):
+    """Model for unified job list response."""
+    
+    jobs: List[UnifiedJob]
+    total: int
+    page: int = 1
+    per_page: int = 50

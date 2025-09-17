@@ -10,14 +10,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
   apiService,
+  type AudibleSearchResult,
   type ConversionJob,
   type ConversionRequest,
   type SourceFolder,
+  type TaggedFile,
+  type TaggingJob,
 } from "@/lib/api";
 import { formatDate, formatFileSize } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +41,8 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Search,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -38,6 +52,11 @@ export default function Home() {
   const [outputFilenames, setOutputFilenames] = useState<
     Record<string, string>
   >({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<AudibleSearchResult[]>([]);
+  const [selectedFile, setSelectedFile] = useState<TaggedFile | null>(null);
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
   const queryClient = useQueryClient();
 
   // Queries
@@ -50,6 +69,20 @@ export default function Home() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery({
     queryKey: ["jobs"],
     queryFn: apiService.getAllJobs,
+    refetchInterval: 2000, // Refetch every 2 seconds for real-time updates
+  });
+
+  const { data: untaggedFilesData, isLoading: filesLoading } = useQuery({
+    queryKey: ["untagged-files"],
+    queryFn: () => apiService.getUntaggedFiles(),
+    refetchInterval: 10000, // Refetch every 10 seconds
+  });
+
+  const untaggedFiles = untaggedFilesData?.files || [];
+
+  const { data: taggingJobs = [], isLoading: taggingJobsLoading } = useQuery({
+    queryKey: ["tagging-jobs"],
+    queryFn: apiService.getTaggingJobs,
     refetchInterval: 2000, // Refetch every 2 seconds for real-time updates
   });
 
@@ -67,6 +100,23 @@ export default function Home() {
     mutationFn: apiService.cancelJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+
+  const createTaggingJobMutation = useMutation({
+    mutationFn: apiService.createTaggingJob,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tagging-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["untagged-files"] });
+    },
+  });
+
+  const applyMetadataMutation = useMutation({
+    mutationFn: ({ fileId, asin }: { fileId: string; asin: string }) =>
+      apiService.applyMetadata(fileId, asin),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["untagged-files"] });
+      setSearchDialogOpen(false);
     },
   });
 
@@ -131,6 +181,32 @@ export default function Home() {
     });
   };
 
+  // Tagging functions
+  const searchAudible = async (fileId: string, query: string) => {
+    setSearching(true);
+    try {
+      const results = await apiService.searchAudible(fileId, query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Error searching Audible:", error);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const startTaggingJob = async (fileId: string) => {
+    const file = untaggedFiles.find((f) => f.id === fileId);
+    if (!file) return;
+
+    createTaggingJobMutation.mutate({
+      file_path: file.file_path,
+    });
+  };
+
+  const applyMetadata = async (fileId: string, asin: string) => {
+    applyMetadataMutation.mutate({ fileId, asin });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "queued":
@@ -151,8 +227,8 @@ export default function Home() {
   };
 
   return (
-    <main className="container mx-auto px-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Source Folders */}
         <Card>
           <CardHeader>
@@ -315,30 +391,203 @@ export default function Home() {
             </Button>
           </CardContent>
         </Card>
-      </div>
 
+        {/* Tagging Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Tag className="h-5 w-5" />
+              <span>File Tagging</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: ["untagged-files"],
+                  })
+                }
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              Tag converted M4B files with metadata
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-[500px] overflow-y-auto">
+            {filesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Loading files...</span>
+              </div>
+            ) : untaggedFiles.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Tag className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No untagged files found</p>
+                <p className="text-sm">Convert some files to see them here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {untaggedFiles.slice(0, 5).map((file) => (
+                  <div
+                    key={file.id}
+                    className="p-3 border rounded-lg space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium truncate">
+                        {file.file_path.split("/").pop()}
+                      </span>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Dialog
+                        open={searchDialogOpen && selectedFile?.id === file.id}
+                        onOpenChange={(open) => {
+                          setSearchDialogOpen(open);
+                          if (!open) setSelectedFile(null);
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedFile(file);
+                              const filename =
+                                file.file_path.split("/").pop() || "";
+                              const filenameWithoutExt = filename.replace(
+                                /\.[^/.]+$/,
+                                ""
+                              );
+                              setSearchQuery(filenameWithoutExt);
+                            }}
+                            disabled={file.is_tagged}
+                          >
+                            <Search className="h-4 w-4 mr-1" />
+                            Search
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>
+                              Search Audible for Metadata
+                            </DialogTitle>
+                            <DialogDescription>
+                              Search for "{file.file_path.split("/").pop()}" on
+                              Audible
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="flex space-x-2">
+                              <Input
+                                placeholder="Enter search query..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyPress={(e) => {
+                                  if (e.key === "Enter" && searchQuery.trim()) {
+                                    searchAudible(file.id, searchQuery);
+                                  }
+                                }}
+                              />
+                              <Button
+                                onClick={() =>
+                                  searchAudible(file.id, searchQuery)
+                                }
+                                disabled={!searchQuery.trim() || searching}
+                              >
+                                {searching ? (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Search className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                            {searchResults.length > 0 && (
+                              <div className="space-y-2">
+                                <h4 className="font-medium">Search Results:</h4>
+                                {searchResults.map((result) => (
+                                  <Card key={result.asin} className="p-3">
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex-1">
+                                        <h5 className="font-medium">
+                                          {result.title}
+                                        </h5>
+                                        <p className="text-sm text-muted-foreground">
+                                          by {result.author}
+                                        </p>
+                                        {result.narrator && (
+                                          <p className="text-sm text-muted-foreground">
+                                            Narrated by {result.narrator}
+                                          </p>
+                                        )}
+                                        {result.series && (
+                                          <p className="text-sm text-muted-foreground">
+                                            Series: {result.series}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        onClick={() =>
+                                          applyMetadata(file.id, result.asin)
+                                        }
+                                      >
+                                        Apply
+                                      </Button>
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startTaggingJob(file.id)}
+                        disabled={file.is_tagged}
+                      >
+                        <Tag className="h-4 w-4 mr-1" />
+                        Auto Tag
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {untaggedFiles.length > 5 && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    ... and {untaggedFiles.length - 5} more files
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       {/* Active Jobs */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle>Conversion Jobs</CardTitle>
+          <CardTitle>Active Jobs</CardTitle>
           <CardDescription>
-            Monitor active and completed conversion jobs
+            Monitor active and completed conversion and tagging jobs
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {jobsLoading ? (
+          {jobsLoading || taggingJobsLoading ? (
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-6 w-6 animate-spin" />
               <span className="ml-2">Loading jobs...</span>
             </div>
-          ) : jobs.length === 0 ? (
+          ) : jobs.length === 0 && taggingJobs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Play className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No active jobs</p>
-              <p className="text-sm">Start a conversion to see jobs here</p>
+              <p className="text-sm">
+                Start a conversion or tagging job to see them here
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Conversion Jobs */}
               {jobs.map((job) => (
                 <div key={job.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -435,10 +684,80 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+
+              {/* Tagging Jobs */}
+              {taggingJobs.map((job) => (
+                <div key={job.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <h3 className="font-medium">
+                        {job.file_path.split("/").pop()}
+                      </h3>
+                      {getStatusBadge(job.status)}
+                      <Badge variant="outline" className="text-xs">
+                        Tagging
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Progress</span>
+                      <span>{job.progress.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={job.progress} className="h-2" />
+                  </div>
+
+                  <Separator className="my-3" />
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="font-medium">Created</p>
+                      <p className="text-muted-foreground">
+                        {formatDate(job.created_at)}
+                      </p>
+                    </div>
+                    {job.started_at && (
+                      <div>
+                        <p className="font-medium">Started</p>
+                        <p className="text-muted-foreground">
+                          {formatDate(job.started_at)}
+                        </p>
+                      </div>
+                    )}
+                    {job.completed_at && (
+                      <div>
+                        <p className="font-medium">Completed</p>
+                        <p className="text-muted-foreground">
+                          {formatDate(job.completed_at)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {job.error_message && (
+                    <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded">
+                      <p className="text-sm text-destructive font-medium">
+                        Error:
+                      </p>
+                      <p className="text-sm text-destructive">
+                        {job.error_message}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <p className="text-sm font-medium mb-2">File Path:</p>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {job.file_path}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
-    </main>
+    </>
   );
 }

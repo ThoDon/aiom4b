@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlmodel import Session, select, and_, or_
 
 from .database import get_session_sync
-from .models import JobDB, JobStatus, JobType, ConversionJob, JobCreate, JobUpdate, TaggingJob, TaggingJobCreate, TaggingJobUpdate
+from .models import JobDB, JobStatus, JobType, ConversionJob, JobCreate, JobUpdate, TaggingJob, TaggingJobCreate, TaggingJobUpdate, UnifiedJob
 
 
 class JobService:
@@ -121,6 +121,27 @@ class JobService:
         self.session.commit()
         return len(old_jobs)
     
+    def count_jobs(
+        self, 
+        status: Optional[JobStatus] = None,
+        job_type: Optional[JobType] = None
+    ) -> int:
+        """Count jobs with optional filtering."""
+        conditions = []
+        
+        if status:
+            conditions.append(JobDB.status == status)
+        
+        if job_type:
+            conditions.append(JobDB.job_type == job_type)
+        
+        statement = select(JobDB)
+        if conditions:
+            statement = statement.where(and_(*conditions))
+        
+        jobs = self.session.exec(statement).all()
+        return len(jobs)
+    
     def to_conversion_job(self, job_db: JobDB) -> ConversionJob:
         """Convert JobDB to ConversionJob for API responses."""
         input_folders = json.loads(job_db.input_folders) if job_db.input_folders else []
@@ -162,6 +183,63 @@ class JobService:
             progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
             metadata=None  # TODO: Load metadata from tagged file if available
         )
+    
+    def to_unified_job(self, job_db: JobDB) -> UnifiedJob:
+        """Convert JobDB to UnifiedJob for API responses."""
+        input_folders = json.loads(job_db.input_folders) if job_db.input_folders else []
+        backup_paths = json.loads(job_db.backup_paths) if job_db.backup_paths else []
+        
+        # Extract filename from output_file path
+        output_filename = ""
+        if job_db.output_file:
+            from pathlib import Path
+            output_filename = Path(job_db.output_file).name
+        
+        # Calculate progress
+        progress = 0.0
+        if job_db.status == JobStatus.COMPLETED:
+            progress = 100.0
+        elif job_db.status == JobStatus.RUNNING:
+            progress = 50.0  # Default running progress
+        elif job_db.status == JobStatus.FAILED:
+            progress = 0.0
+        
+        # Create unified job with appropriate fields based on job type
+        if job_db.job_type == JobType.CONVERSION:
+            return UnifiedJob(
+                id=job_db.id,
+                job_type=job_db.job_type,
+                status=job_db.status,
+                created_at=job_db.created_at,
+                started_at=job_db.start_time,
+                completed_at=job_db.end_time,
+                error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
+                progress=progress,
+                source_folders=input_folders,
+                output_filename=output_filename,
+                output_path=job_db.output_file,
+                backup_paths=backup_paths,
+                file_path=None,
+                metadata=None
+            )
+        else:  # TAGGING
+            file_path = input_folders[0] if input_folders else ""
+            return UnifiedJob(
+                id=job_db.id,
+                job_type=job_db.job_type,
+                status=job_db.status,
+                created_at=job_db.created_at,
+                started_at=job_db.start_time,
+                completed_at=job_db.end_time,
+                error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
+                progress=progress,
+                source_folders=None,
+                output_filename=None,
+                output_path=None,
+                backup_paths=None,
+                file_path=file_path,
+                metadata=None  # TODO: Load metadata from tagged file if available
+            )
 
 
 # Global job service instance

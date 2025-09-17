@@ -96,6 +96,34 @@ export interface TaggingJob {
   metadata?: any;
 }
 
+export interface UnifiedJob {
+  id: string;
+  job_type: 'conversion' | 'tagging';
+  status: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+  progress: number;
+  
+  // Conversion job fields
+  source_folders?: string[];
+  output_filename?: string;
+  output_path?: string;
+  backup_paths?: string[];
+  
+  // Tagging job fields
+  file_path?: string;
+  metadata?: any;
+}
+
+export interface UnifiedJobListResponse {
+  jobs: UnifiedJob[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export interface TaggingJobCreate {
   file_path: string;
   asin?: string;
@@ -232,6 +260,18 @@ export const apiService = {
   // Delete tagged file
   deleteTaggedFile: async (fileId: string): Promise<{ message: string }> => {
     const response = await api.delete(`/files/${fileId}`);
+    return response.data;
+  },
+
+  // Unified jobs API functions
+  // Get unified jobs (conversion and tagging)
+  getUnifiedJobs: async (params?: {
+    status?: string;
+    type?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<UnifiedJobListResponse> => {
+    const response = await api.get("/jobs/unified", { params });
     return response.data;
   },
 };
