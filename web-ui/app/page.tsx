@@ -184,7 +184,10 @@ export default function Home() {
                       <CardDescription className="flex flex-col gap-2">
                         Select folders containing MP3 files to convert
                         {!foldersLoading && folders.length > 0 && (
-                          <div className="flex items-center space-x-2 pb-3 border-b">
+                          <div
+                            className="flex items-center space-x-2 pb-3 border-b cursor-pointer"
+                            onClick={handleSelectAll}
+                          >
                             <Checkbox
                               checked={
                                 selectedFolders.length === folders.length &&
@@ -218,7 +221,8 @@ export default function Home() {
                           {folders.map((folder) => (
                             <div
                               key={folder.path}
-                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                              onClick={() => handleFolderToggle(folder.path)}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
                             >
                               <Checkbox
                                 checked={selectedFolders.includes(folder.path)}

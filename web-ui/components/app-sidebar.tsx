@@ -107,11 +107,11 @@ const data = {
       url: "#",
       icon: SettingsIcon,
     },
-    {
-      title: "Help",
-      url: "#",
-      icon: HelpCircleIcon,
-    },
+    // {
+    //   title: "Help",
+    //   url: "#",
+    //   icon: HelpCircleIcon,
+    // },
   ],
   documents: [
     {
@@ -152,11 +152,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        {/* <NavDocuments items={data.documents} /> */}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        {/* <NavUser user={data.user} /> */}
+        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarFooter>
     </Sidebar>
   );
