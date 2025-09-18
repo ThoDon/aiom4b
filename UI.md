@@ -21,8 +21,8 @@ web-ui/
 │   ├── globals.css        # Global styles
 │   ├── layout.tsx         # Root layout component
 │   ├── page.tsx           # Home page (conversion interface)
-│   ├── tagging/           # Tagging management pages
-│   │   └── page.tsx       # Tagging dashboard
+│   ├── files/             # File management pages
+│   │   └── page.tsx       # Files dashboard
 │   ├── jobs/              # Jobs management pages
 │   │   └── page.tsx       # Jobs dashboard
 │   └── providers.tsx      # React Query provider
@@ -54,6 +54,7 @@ The main conversion interface where users can:
 - **Configure Individual Outputs**: Set custom output filename for each selected folder
 - **Start Multiple Conversions**: Initiate separate conversion jobs for each folder
 - **Monitor Active Jobs**: View real-time job progress for all active conversions
+- **File Status Overview**: See counts of processing, ready, and active files
 
 #### Key Features
 
@@ -61,10 +62,11 @@ The main conversion interface where users can:
 - **Folder Selection**: Multi-select with checkboxes
 - **Individual Filename Configuration**: Each selected folder gets its own output filename input
 - **Separate Job Creation**: Each folder creates its own conversion job and M4B file
-- **Progress Tracking**: Visual progress bars for each job
+- **Incremental Progress Tracking**: Real-time progress updates (0-100%) with database persistence
 - **Status Badges**: Color-coded job status indicators
 - **Download Links**: Direct download for completed jobs
 - **Error Handling**: User-friendly error messages
+- **File Status Dashboard**: Overview cards showing processing, ready, and active file counts
 
 #### Components Used
 
@@ -76,35 +78,33 @@ The main conversion interface where users can:
 - `Badge` - Status indicators
 - `Separator` - Visual organization
 
-### 2. Tagging Dashboard (`/tagging`)
+### 2. Files Dashboard (`/files`)
 
-The tagging management interface provides comprehensive file tagging capabilities:
+The file management interface provides comprehensive monitoring of the file processing workflow:
 
-- **File List**: View all converted but untagged M4B files
-- **Search Interface**: Manual search with custom queries for Audible API
-- **Result Selection**: Choose from multiple search results with book details
-- **Progress Tracking**: Real-time job status updates for tagging operations
-- **File Management**: Delete untagged files if needed
-- **Metadata Display**: Show current tagging status and metadata
+- **Processing Files**: View files currently being converted in the processing/ folder
+- **Ready Files**: View converted files waiting for tagging in the readyToTag/ folder
+- **Active Jobs**: Monitor running conversion and tagging jobs with real-time progress
+- **File Details**: See file sizes, creation dates, and paths
+- **Download Access**: Download ready files directly
 
 #### Key Features
 
-- **Untagged File Detection**: Automatically identifies files needing metadata
-- **Audible API Integration**: Search across multiple Audible locales
-- **Interactive Search**: Custom search queries with real-time results
-- **Metadata Application**: One-click metadata application to files
-- **Job Tracking**: Background job processing with progress monitoring
-- **File Management**: Delete unwanted files from the system
+- **Tabbed Interface**: Separate tabs for Processing, Ready to Tag, and Active Jobs
+- **Real-time Updates**: Auto-refresh every 2 seconds for processing files and jobs
+- **File Status Tracking**: Visual indicators for file states (processing, ready, completed)
+- **Progress Monitoring**: Live progress bars for active conversion and tagging jobs
+- **File Information**: Detailed file metadata including size and creation time
+- **Download Functionality**: Direct download links for ready files
 
 #### Components Used
 
-- `Tabs` - Separate tabs for files and jobs
-- `Table` - File listing with metadata
-- `Dialog` - Search interface modal
-- `Card` - Search result display
-- `Button` - Actions and controls
+- `Tabs` - Tabbed interface for different file states
+- `Card` - File information display
 - `Progress` - Job progress visualization
 - `Badge` - Status indicators
+- `Button` - Actions and controls
+- `Separator` - Visual organization
 
 ### 3. Jobs Dashboard (`/jobs`)
 
@@ -160,6 +160,13 @@ export const apiService = {
   getJobStatus: (id: string) => Promise<ConversionJob>,
   downloadFile: (id: string) => Promise<Blob>,
   cancelJob: (id: string) => Promise<{ message: string }>,
+
+  // File management
+  getProcessingFiles: () => Promise<ProcessingFile[]>,
+  getReadyFiles: () => Promise<ReadyFile[]>,
+
+  // Unified jobs
+  getUnifiedJobs: (params?) => Promise<UnifiedJobListResponse>,
 };
 ```
 
@@ -195,6 +202,36 @@ interface JobListResponse {
 
 interface ConversionRequest {
   folder_conversions: Record<string, string | null>;
+}
+
+interface ProcessingFile {
+  filename: string;
+  path: string;
+  size_mb: number;
+  created_at: string;
+}
+
+interface ReadyFile {
+  filename: string;
+  path: string;
+  size_mb: number;
+  created_at: string;
+}
+
+interface UnifiedJob {
+  id: string;
+  job_type: "conversion" | "tagging";
+  status: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+  progress: number;
+  source_folders?: string[];
+  output_filename?: string;
+  output_path?: string;
+  file_path?: string;
+  metadata?: any;
 }
 ```
 

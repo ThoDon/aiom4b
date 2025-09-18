@@ -3,7 +3,6 @@
 import {
   BarChartIcon,
   Download,
-  FileIcon,
   FolderIcon,
   HelpCircleIcon,
   History,
@@ -113,7 +112,7 @@ const data = {
     {
       name: "Source Files",
       url: "/",
-      icon: FileIcon,
+      icon: FolderIcon,
     },
     {
       name: "Conversion Logs",

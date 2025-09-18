@@ -38,6 +38,7 @@ class JobDB(SQLModel, table=True):
     input_folders: str = SQLField(description="JSON string of input folders")
     output_file: Optional[str] = SQLField(default=None, description="Path to generated .m4b")
     backup_paths: Optional[str] = SQLField(default=None, description="JSON string of backup paths created during conversion")
+    progress: float = SQLField(default=0.0, description="Progress percentage (0-100)")
     start_time: Optional[datetime] = SQLField(default=None)
     end_time: Optional[datetime] = SQLField(default=None)
     log: Optional[str] = SQLField(default=None, description="Error/info messages")
@@ -117,6 +118,7 @@ class JobUpdate(BaseModel):
     status: Optional[JobStatus] = None
     output_file: Optional[str] = None
     backup_paths: Optional[str] = None
+    progress: Optional[float] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     log: Optional[str] = None

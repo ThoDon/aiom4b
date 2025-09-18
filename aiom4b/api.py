@@ -286,35 +286,59 @@ async def _run_conversion_task(
     """Background task to run the actual conversion and update the database."""
     
     try:
-        # Update job status to running
-        job_service.update_job(job_id, JobUpdate(
-            status=JobStatus.RUNNING,
-            start_time=datetime.utcnow()
-        ))
-        
-        # Run the actual conversion
-        job = await converter.convert_folders(
+        # Run the actual conversion (now handles all job updates internally)
+        await converter.convert_folders(
+            job_id=job_id,
             source_folders=source_folders,
-            output_filename=output_filename,
-            job_id=str(job_id)
+            output_filename=output_filename
         )
         
-        # Update job with results
-        backup_paths_json = json.dumps(job.backup_paths) if job.backup_paths else None
-        job_service.update_job(job_id, JobUpdate(
-            status=JobStatus.COMPLETED,
-            end_time=datetime.utcnow(),
-            output_file=job.output_path,
-            backup_paths=backup_paths_json
-        ))
-        
     except Exception as e:
-        # Update job with error
+        # Update job with error (converter should handle this, but just in case)
         job_service.update_job(job_id, JobUpdate(
             status=JobStatus.FAILED,
             end_time=datetime.utcnow(),
             log=str(e)
         ))
+
+
+# File management endpoints
+@router.get("/files/processing")
+async def list_processing_files() -> List[dict]:
+    """List all files currently being converted (in processing/ folder)."""
+    from .config import PROCESSING_DIR
+    
+    processing_files = []
+    
+    if PROCESSING_DIR.exists():
+        for file_path in PROCESSING_DIR.glob("*.m4b"):
+            processing_files.append({
+                "filename": file_path.name,
+                "path": str(file_path),
+                "size_mb": file_path.stat().st_size / (1024 * 1024),
+                "created_at": datetime.fromtimestamp(file_path.stat().st_ctime)
+            })
+    
+    return processing_files
+
+
+@router.get("/files/ready")
+async def list_ready_files() -> List[dict]:
+    """List all converted files waiting for tagging (in readyToTag/ folder)."""
+    from .config import READY_TO_TAG_DIR
+    
+    ready_files = []
+    
+    if READY_TO_TAG_DIR.exists():
+        for file_path in READY_TO_TAG_DIR.glob("*.m4b"):
+            ready_files.append({
+                "filename": file_path.name,
+                "path": str(file_path),
+                "size_mb": file_path.stat().st_size / (1024 * 1024),
+                "created_at": datetime.fromtimestamp(file_path.stat().st_ctime)
+            })
+    
+    return ready_files
 
 
 # Tagging endpoints
@@ -370,6 +394,17 @@ async def create_tagging_job(
         status=job_db.status,
         message=f"Tagging job started with ID: {job_db.id}"
     )
+
+
+@router.get("/files/by-path", response_model=Optional[TaggedFile])
+async def get_file_by_path(
+    file_path: str = Query(..., description="File path to look up")
+) -> Optional[TaggedFile]:
+    """Get file information by path."""
+    tagged_file = tagging_service.get_tagged_file_by_path(file_path)
+    if tagged_file:
+        return tagging_service.to_tagged_file(tagged_file)
+    return None
 
 
 @router.post("/files/{file_id}/search", response_model=List[AudibleSearchResult])

@@ -177,13 +177,13 @@ Get the current status of a conversion job.
   "id": "123e4567-e89b-12d3-a456-426614174000",
   "source_folders": ["/path/to/folder1", "/path/to/folder2"],
   "output_filename": "my_audiobook.m4b",
-  "status": "processing",
+  "status": "running",
   "created_at": "2024-01-15T10:30:00",
   "started_at": "2024-01-15T10:30:05",
   "completed_at": null,
   "error_message": null,
   "progress": 45.5,
-  "output_path": null
+  "output_path": "/app/data/readyToTag/my_audiobook.m4b"
 }
 ```
 
@@ -299,6 +299,58 @@ Remove old completed/failed jobs from the database.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/jobs/clear?days_old=7"
+```
+
+## File Management Endpoints
+
+#### 1. List Processing Files
+
+**GET** `/files/processing`
+
+Returns all files currently being converted (in processing/ folder).
+
+**Response:**
+
+```json
+[
+  {
+    "filename": "book1_20240115_103000.m4b",
+    "path": "/app/data/processing/book1_20240115_103000.m4b",
+    "size_mb": 245.7,
+    "created_at": "2024-01-15T10:30:00"
+  }
+]
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/files/processing"
+```
+
+#### 2. List Ready Files
+
+**GET** `/files/ready`
+
+Returns all converted files waiting for tagging (in readyToTag/ folder).
+
+**Response:**
+
+```json
+[
+  {
+    "filename": "book1_20240115_103000.m4b",
+    "path": "/app/data/readyToTag/book1_20240115_103000.m4b",
+    "size_mb": 245.7,
+    "created_at": "2024-01-15T10:30:00"
+  }
+]
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/files/ready"
 ```
 
 ## CLI Commands

@@ -9,9 +9,11 @@ DATA_DIR = BASE_DIR / "data"
 SOURCE_DIR = BASE_DIR / "source"
 OUTPUT_DIR = DATA_DIR / "output"
 BACKUP_DIR = DATA_DIR / "backup"
+PROCESSING_DIR = DATA_DIR / "processing"
+READY_TO_TAG_DIR = DATA_DIR / "readyToTag"
 
 # Create directories if they don't exist
-for directory in [DATA_DIR, SOURCE_DIR, OUTPUT_DIR, BACKUP_DIR]:
+for directory in [DATA_DIR, SOURCE_DIR, OUTPUT_DIR, BACKUP_DIR, PROCESSING_DIR, READY_TO_TAG_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
 # Application settings

@@ -35,12 +35,25 @@ class TaggingService:
     
     def get_untagged_files(self, limit: int = 50, offset: int = 0) -> List[TaggedFile]:
         """Get all converted but untagged M4B files."""
-        from .config import OUTPUT_DIR
+        from .config import OUTPUT_DIR, READY_TO_TAG_DIR
         
-        # Find all M4B files in output directory
+        # Find all M4B files in ready-to-tag and output directories
         m4b_files = []
+        
+        # First check ready-to-tag directory (new workflow)
+        if READY_TO_TAG_DIR.exists():
+            for file_path in READY_TO_TAG_DIR.glob("*.m4b"):
+                # Check if file is already in database
+                existing = self.get_tagged_file_by_path(str(file_path))
+                if not existing or not existing.is_tagged:
+                    m4b_files.append(file_path)
+        
+        # Also check output directory (legacy workflow)
         if OUTPUT_DIR.exists():
             for file_path in OUTPUT_DIR.rglob("*.m4b"):
+                # Skip if already found in ready-to-tag directory
+                if any(str(file_path) == str(ready_file) for ready_file in m4b_files):
+                    continue
                 # Check if file is already in database
                 existing = self.get_tagged_file_by_path(str(file_path))
                 if not existing or not existing.is_tagged:
@@ -511,7 +524,7 @@ class TaggingService:
             response.raise_for_status()
             
             # Create covers directory
-            from .config import OUTPUT_DIR
+            from .config import OUTPUT_DIR, READY_TO_TAG_DIR
             covers_dir = OUTPUT_DIR / "covers"
             covers_dir.mkdir(exist_ok=True)
             
@@ -647,7 +660,7 @@ class TaggingService:
     def move_to_library(self, file_path: Path, metadata: AudibleBookDetails, cover_path: Optional[str] = None) -> Path:
         """Move tagged file to organized library structure compatible with series."""
         try:
-            from .config import OUTPUT_DIR
+            from .config import OUTPUT_DIR, READY_TO_TAG_DIR
             
             # Create library directory structure: library/Author/Series/Title.m4b
             author = metadata.author or "Unknown Author"

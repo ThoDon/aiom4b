@@ -98,20 +98,20 @@ export interface TaggingJob {
 
 export interface UnifiedJob {
   id: string;
-  job_type: 'conversion' | 'tagging';
+  job_type: "conversion" | "tagging";
   status: string;
   created_at: string;
   started_at?: string;
   completed_at?: string;
   error_message?: string;
   progress: number;
-  
+
   // Conversion job fields
   source_folders?: string[];
   output_filename?: string;
   output_path?: string;
   backup_paths?: string[];
-  
+
   // Tagging job fields
   file_path?: string;
   metadata?: any;
@@ -127,6 +127,13 @@ export interface UnifiedJobListResponse {
 export interface TaggingJobCreate {
   file_path: string;
   asin?: string;
+}
+
+export interface ReadyFile {
+  filename: string;
+  path: string;
+  size_mb: number;
+  created_at: string;
 }
 
 // API functions
@@ -223,6 +230,14 @@ export const apiService = {
     return response.data;
   },
 
+  // Get file by path to get UUID
+  getFileByPath: async (filePath: string): Promise<TaggedFile | null> => {
+    const response = await api.get("/files/by-path", {
+      params: { file_path: filePath },
+    });
+    return response.data;
+  },
+
   // Search Audible API
   searchAudible: async (
     fileId: string,
@@ -272,6 +287,12 @@ export const apiService = {
     per_page?: number;
   }): Promise<UnifiedJobListResponse> => {
     const response = await api.get("/jobs/unified", { params });
+    return response.data;
+  },
+
+  // Get ready files (still needed for home page tagging section)
+  getReadyFiles: async (): Promise<ReadyFile[]> => {
+    const response = await api.get("/files/ready");
     return response.data;
   },
 };

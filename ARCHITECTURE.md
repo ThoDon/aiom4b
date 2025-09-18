@@ -20,7 +20,9 @@ aiom4b/
 │   ├── job_service.py     # Job management service
 │   └── utils.py           # Utility functions
 ├── data/                  # Application data directory
-│   ├── output/           # Converted M4B files
+│   ├── processing/       # Temporary files being converted
+│   ├── readyToTag/       # Converted M4B files ready for tagging
+│   ├── output/           # Final tagged M4B files (legacy)
 │   ├── backup/           # Backup files with timestamps
 │   └── aiom4b.db         # SQLite database file
 ├── source/               # Source MP3 folders
@@ -57,6 +59,11 @@ aiom4b/
 - **POST /api/v1/jobs/clear** - Clear old jobs
 - **GET /api/v1/download/{job_id}** - Download converted file
 
+#### File Management Endpoints
+
+- **GET /api/v1/files/processing** - List files currently being converted
+- **GET /api/v1/files/ready** - List converted files ready for tagging
+
 #### Tagging Endpoints
 
 - **GET /api/v1/files/untagged** - List all untagged M4B files
@@ -85,16 +92,18 @@ aiom4b/
 ### 4. Conversion Engine (`converter.py`)
 
 - `MP3ToM4BConverter` class handles the conversion process
-- Uses FFmpeg for audio processing
+- Uses FFmpeg for audio processing with real-time progress tracking
 - Supports multiple CPU cores for faster processing
-- Job management with status tracking
-- Error handling and progress reporting
+- File workflow: processing/ → readyToTag/ folder management
+- Incremental progress updates (0-100%) with database persistence
+- Error handling with automatic cleanup of processing files
+- Background job processing with status tracking
 
 ### 5. Data Models (`models.py`)
 
 #### Core Models
 
-- `JobDB` - SQLModel database model for persistent storage (extended with job_type)
+- `JobDB` - SQLModel database model for persistent storage (extended with job_type and progress)
 - `TaggedFileDB` - SQLModel database model for tagged files
 - `JobStatus` enum for job states
 - `JobType` enum for job types (conversion, tagging)
@@ -206,16 +215,20 @@ aiom4b/
 - UUID-based job identification
 - SQLite database for persistent job storage
 - Status tracking: queued → running → completed/failed
-- Progress reporting for long-running operations
+- **Real-time Progress Tracking**: Incremental progress updates (0-100%) with database persistence
+- **File State Management**: Jobs reflect correct folder state (processing/readyToTag/)
 - Job filtering, pagination, and cleanup operations
 - Database-backed job history and analytics
 
 ### 3. File Organization
 
-- Separate directories for source, output, and backup
-- Timestamped backups for safety
-- Recursive MP3 file discovery
-- Automatic directory creation
+- **Processing Workflow**: processing/ → readyToTag/ → output/ folder structure
+- **Temporary Processing**: Files written to processing/ during conversion
+- **Ready State**: Completed files moved to readyToTag/ for tagging
+- **Final Output**: Tagged files moved to output/ directory
+- **Backup Safety**: Timestamped backups for safety
+- **Recursive Discovery**: MP3 file discovery across folder structures
+- **Automatic Creation**: Directory structure created automatically
 
 ### 4. Error Handling
 

@@ -78,6 +78,8 @@ class JobService:
             job.output_file = job_update.output_file
         if job_update.backup_paths is not None:
             job.backup_paths = job_update.backup_paths
+        if job_update.progress is not None:
+            job.progress = job_update.progress
         if job_update.start_time is not None:
             job.start_time = job_update.start_time
         if job_update.end_time is not None:
@@ -162,7 +164,7 @@ class JobService:
             started_at=job_db.start_time,
             completed_at=job_db.end_time,
             error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
-            progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
+            progress=job_db.progress,
             output_path=job_db.output_file,
             backup_paths=backup_paths
         )
@@ -180,7 +182,7 @@ class JobService:
             started_at=job_db.start_time,
             completed_at=job_db.end_time,
             error_message=job_db.log if job_db.status == JobStatus.FAILED else None,
-            progress=100.0 if job_db.status == JobStatus.COMPLETED else 0.0,
+            progress=job_db.progress,
             metadata=None  # TODO: Load metadata from tagged file if available
         )
     
@@ -195,14 +197,8 @@ class JobService:
             from pathlib import Path
             output_filename = Path(job_db.output_file).name
         
-        # Calculate progress
-        progress = 0.0
-        if job_db.status == JobStatus.COMPLETED:
-            progress = 100.0
-        elif job_db.status == JobStatus.RUNNING:
-            progress = 50.0  # Default running progress
-        elif job_db.status == JobStatus.FAILED:
-            progress = 0.0
+        # Use actual progress from database
+        progress = job_db.progress
         
         # Create unified job with appropriate fields based on job type
         if job_db.job_type == JobType.CONVERSION:

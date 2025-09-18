@@ -62,10 +62,11 @@ data/backup/
 
 ### 3.1 Job Initialization
 
-- **Status Update**: Changes job status to "processing"
+- **Status Update**: Changes job status to "running"
 - **Start Time**: Records processing start timestamp
 - **Resource Allocation**: Allocates CPU cores for FFmpeg
 - **Progress Reset**: Initializes progress to 0%
+- **Processing Directory**: Creates temporary output in `data/processing/`
 
 ### 3.2 FFmpeg Processing
 
@@ -76,11 +77,13 @@ data/backup/
   - Channels: Stereo (2)
   - Sample Rate: 44.1kHz
 - **CPU Optimization**: Uses all available CPU cores
-- **Output Generation**: Creates single M4B file
+- **Output Generation**: Creates single M4B file in processing directory
 
 ### 3.3 Progress Tracking
 
 - **Real-time Updates**: Monitors FFmpeg output for progress
+- **Incremental Progress**: Updates job progress percentage (0-100%)
+- **Database Updates**: Persists progress changes to database
 - **Status Reporting**: Updates job progress percentage
 - **Error Detection**: Captures and reports FFmpeg errors
 - **Timeout Handling**: Implements processing timeouts
@@ -96,7 +99,8 @@ data/backup/
 
 ### 4.1 File Organization
 
-- **Output Location**: `data/output/{filename}.m4b`
+- **Processing Location**: `data/processing/{filename}.m4b` (temporary)
+- **Ready Location**: `data/readyToTag/{filename}.m4b` (final)
 - **Naming Convention**: Sanitized, timestamped filenames
 - **Metadata Preservation**: Maintains original file metadata
 - **Access Permissions**: Sets appropriate file permissions
@@ -106,14 +110,21 @@ data/backup/
 - **Status Update**: Changes job status to "completed"
 - **Completion Time**: Records processing end timestamp
 - **Progress Finalization**: Sets progress to 100%
-- **Output Path**: Records final file location
+- **File Movement**: Moves file from processing/ to readyToTag/
+- **Output Path**: Records final file location in readyToTag/
 
 ### 4.3 Cleanup
 
-- **Temporary Files**: Removes intermediate processing files
+- **Processing Cleanup**: Removes files from processing/ directory
 - **Resource Release**: Frees allocated system resources
 - **Job Archival**: Moves completed job to archive
 - **Log Rotation**: Manages log file sizes
+
+### 4.4 Error Handling
+
+- **Failed Conversions**: Keeps backup, cleans up processing/ artifacts
+- **Rollback Support**: Restores from backup on critical failures
+- **Error Logging**: Detailed error information in job records
 
 ## 5. Error Handling
 
@@ -186,7 +197,9 @@ BACKUP_RETENTION_DAYS=30
 ```
 aiom4b/
 ├── data/
-│   ├── output/          # Converted M4B files
+│   ├── processing/      # Temporary files being converted
+│   ├── readyToTag/      # Converted M4B files ready for tagging
+│   ├── output/          # Final tagged M4B files (legacy)
 │   ├── backup/          # Backup files
 │   └── logs/            # Application logs
 ├── source/              # Source MP3 folders

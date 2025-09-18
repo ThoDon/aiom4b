@@ -44,6 +44,7 @@ import {
   Search,
   Tag,
   Trash2,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -72,13 +73,22 @@ export default function Home() {
     refetchInterval: 2000, // Refetch every 2 seconds for real-time updates
   });
 
-  const { data: untaggedFilesData, isLoading: filesLoading } = useQuery({
-    queryKey: ["untagged-files"],
-    queryFn: () => apiService.getUntaggedFiles(),
-    refetchInterval: 10000, // Refetch every 10 seconds
+  const { data: readyFiles = [], isLoading: readyFilesLoading } = useQuery({
+    queryKey: ["ready-files"],
+    queryFn: apiService.getReadyFiles,
+    refetchInterval: 5000, // Refetch every 5 seconds
   });
 
-  const untaggedFiles = untaggedFilesData?.files || [];
+  // Use readyFiles instead of untaggedFiles for the new workflow
+  const untaggedFiles = readyFiles.map((file) => ({
+    id: file.path, // Use path as ID since ReadyFile doesn't have an ID
+    file_path: file.path,
+    filename: file.filename,
+    size_mb: file.size_mb,
+    is_tagged: false, // These files are ready for tagging, so they're not tagged yet
+    created_at: file.created_at,
+    updated_at: file.created_at, // Use created_at as updated_at since we don't have separate updated_at
+  }));
 
   const { data: taggingJobs = [], isLoading: taggingJobsLoading } = useQuery({
     queryKey: ["tagging-jobs"],
@@ -107,7 +117,7 @@ export default function Home() {
     mutationFn: apiService.createTaggingJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tagging-jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["untagged-files"] });
+      queryClient.invalidateQueries({ queryKey: ["ready-files"] });
     },
   });
 
@@ -115,7 +125,7 @@ export default function Home() {
     mutationFn: ({ fileId, asin }: { fileId: string; asin: string }) =>
       apiService.applyMetadata(fileId, asin),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["untagged-files"] });
+      queryClient.invalidateQueries({ queryKey: ["ready-files"] });
       setSearchDialogOpen(false);
     },
   });
@@ -182,10 +192,18 @@ export default function Home() {
   };
 
   // Tagging functions
-  const searchAudible = async (fileId: string, query: string) => {
+  const searchAudible = async (filePath: string, query: string) => {
     setSearching(true);
     try {
-      const results = await apiService.searchAudible(fileId, query);
+      // First get the file UUID by path
+      const fileInfo = await apiService.getFileByPath(filePath);
+      if (!fileInfo) {
+        console.error("File not found in database:", filePath);
+        return;
+      }
+
+      // Then search using the UUID
+      const results = await apiService.searchAudible(fileInfo.id, query);
       setSearchResults(results);
     } catch (error) {
       console.error("Error searching Audible:", error);
@@ -203,8 +221,20 @@ export default function Home() {
     });
   };
 
-  const applyMetadata = async (fileId: string, asin: string) => {
-    applyMetadataMutation.mutate({ fileId, asin });
+  const applyMetadata = async (filePath: string, asin: string) => {
+    try {
+      // First get the file UUID by path
+      const fileInfo = await apiService.getFileByPath(filePath);
+      if (!fileInfo) {
+        console.error("File not found in database:", filePath);
+        return;
+      }
+
+      // Then apply metadata using the UUID
+      applyMetadataMutation.mutate({ fileId: fileInfo.id, asin });
+    } catch (error) {
+      console.error("Error applying metadata:", error);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -228,6 +258,45 @@ export default function Home() {
 
   return (
     <>
+      {/* File Status Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Folder className="h-5 w-5 text-blue-500" />
+              <div>
+                <p className="text-sm font-medium">Source Folders</p>
+                <p className="text-2xl font-bold">{folders.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Tag className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-sm font-medium">Ready to Tag</p>
+                <p className="text-2xl font-bold">{readyFiles.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Play className="h-5 w-5 text-purple-500" />
+              <div>
+                <p className="text-sm font-medium">Active Jobs</p>
+                <p className="text-2xl font-bold">
+                  {jobs.filter((j) => j.status === "running").length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Source Folders */}
         <Card>
@@ -295,7 +364,9 @@ export default function Home() {
                       onCheckedChange={() => handleFolderToggle(folder.path)}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{folder.path}</p>
+                      <p className="font-medium truncate">
+                        {folder.path.split("/").pop()}
+                      </p>
                       <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                         <span>{folder.mp3_count} files</span>
                         <span>
@@ -337,7 +408,7 @@ export default function Home() {
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium truncate">
-                          {folder}
+                          {folder.split("/").pop()}
                         </span>
                         <Button
                           variant="ghost"
@@ -415,7 +486,7 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="max-h-[500px] overflow-y-auto">
-            {filesLoading ? (
+            {readyFilesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin" />
                 <span className="ml-2">Loading files...</span>
@@ -484,13 +555,13 @@ export default function Home() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyPress={(e) => {
                                   if (e.key === "Enter" && searchQuery.trim()) {
-                                    searchAudible(file.id, searchQuery);
+                                    searchAudible(file.file_path, searchQuery);
                                   }
                                 }}
                               />
                               <Button
                                 onClick={() =>
-                                  searchAudible(file.id, searchQuery)
+                                  searchAudible(file.file_path, searchQuery)
                                 }
                                 disabled={!searchQuery.trim() || searching}
                               >
@@ -528,7 +599,10 @@ export default function Home() {
                                       <Button
                                         size="sm"
                                         onClick={() =>
-                                          applyMetadata(file.id, result.asin)
+                                          applyMetadata(
+                                            file.file_path,
+                                            result.asin
+                                          )
                                         }
                                       >
                                         Apply
